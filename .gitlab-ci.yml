@@ -1,9 +1,9 @@
-# Day 2: NestJS Backend CI (GitLab)
-# ဒီဖိုင်ကို module/ folder ရဲ့ Root မှာ ဆောက်ပါ
+
 
 stages:
   - install
-  - quality
+  - lint
+  - test
   - build
 
 default:
@@ -20,22 +20,32 @@ variables:
   JWT_SECRET: "dummy_secret_for_ci"
   PORT: "3000"
 
+# ၁။ Dependencies များ ဒေါင်းလုဒ်ဆွဲခြင်း
 install_dependencies:
   stage: install
   script:
-    - cd backend          # ⬅️ မဖြစ်မနေ ထည့်ရမယ်
+    - cd backend
     - npm ci
   artifacts:
     paths:
       - backend/node_modules/
     expire_in: 1 day
 
+# ၂။ Syntax နှင့် Code Standard စစ်ဆေးခြင်း (Lint)
 lint_code:
-  stage: quality
+  stage: lint
   script:
     - cd backend
     - npm run lint
 
+# ၃။ Logic မှန်မမှန် စစ်ဆေးခြင်း (Unit Test)
+unit_test:
+  stage: test
+  script:
+    - cd backend
+    - npm run test
+
+# ၄။ GitLab ပေါ်ကနေ main branch သို့ merge လုပ်ချိန် သို့မဟုတ် merge ပြီးမှသာ build မည်
 build_app:
   stage: build
   script:
@@ -45,3 +55,6 @@ build_app:
     paths:
       - backend/dist/
     expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
