@@ -1,0 +1,47 @@
+# Day 2: NestJS Backend CI (GitLab)
+# ဒီဖိုင်ကို module/ folder ရဲ့ Root မှာ ဆောက်ပါ
+
+stages:
+  - install
+  - quality
+  - build
+
+default:
+  image: node:20-alpine
+  cache:
+    key:
+      files:
+        - backend/package-lock.json
+    paths:
+      - backend/node_modules/
+
+variables:
+  MONGODB_URI: "mongodb://localhost:27017/test_db"
+  JWT_SECRET: "dummy_secret_for_ci"
+  PORT: "3000"
+
+install_dependencies:
+  stage: install
+  script:
+    - cd backend          # ⬅️ မဖြစ်မနေ ထည့်ရမယ်
+    - npm ci
+  artifacts:
+    paths:
+      - backend/node_modules/
+    expire_in: 1 day
+
+lint_code:
+  stage: quality
+  script:
+    - cd backend
+    - npm run lint
+
+build_app:
+  stage: build
+  script:
+    - cd backend
+    - npm run build
+  artifacts:
+    paths:
+      - backend/dist/
+    expire_in: 1 week
