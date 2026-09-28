@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -19,6 +21,15 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     //   appKey: 'YOUR_APP_KEY',
     //   appSecret: 'YOUR_APP_SECRET',
     //   serviceId: 'backend',
+        ConfigModule.forRoot({ isGlobal: true }),
+        //  MongoDB ချိတ်
+        MongooseModule.forRootAsync({
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => ({
+          uri: config.get<string>('MONGO_URI'),
+          }),
+        }),
+
     // }),
   UsersModule,
     AuthModule,
