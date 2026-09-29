@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
+import { requestContext } from '../logger/request-context';
 
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
@@ -15,6 +16,14 @@ export class RequestIdMiddleware implements NestMiddleware {
     req.requestId = requestId;
     res.setHeader('x-request-id', requestId);
 
-    next();
+    // ─── AsyncLocalStorage ထဲ run ───
+    requestContext.run(
+      {
+        requestId,
+        method: req.method,
+        path: req.originalUrl,
+      },
+      () => next(),
+    );
   }
 }

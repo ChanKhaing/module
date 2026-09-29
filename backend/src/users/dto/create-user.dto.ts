@@ -21,16 +21,40 @@ export class CreateUserDto {
   @IsString()
   @MinLength(2, { message: 'fullName must be at least 2 characters' })
   @MaxLength(100)
-  fullName!: string;                          
+  fullName!: string;                          // ← name → fullName
 
   @IsOptional()
   @IsString()
   @Matches(/^[0-9+\-\s]{7,20}$/, {
     message: 'phone must be a valid phone number',
   })
-  phone?: string | number ;                             
+  phone?: string;                             // ← phone အသစ်
 
   @IsOptional()
   @IsEnum(UserRole, { message: 'role must be customer/agent/admin' })
   role?: UserRole;
 }
+
+// export class CreateUserDto {
+//   @IsEmail()
+//   email!: string;
+
+//   @IsString()
+//   @MinLength(8)
+//   @MaxLength(64)
+//   password!: string;
+
+//   @IsString()
+//   @MinLength(2)
+//   @MaxLength(100)
+//   fullName!: string;
+
+//   @IsOptional()
+//   @IsString()
+//   @MaxLength(20)
+//   phone?: string;
+
+//   @IsOptional()
+//   @IsEnum(UserRole)
+//   role?: UserRole;
+// }

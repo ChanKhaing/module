@@ -1,18 +1,21 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post,Query } from '@nestjs/common';
+import { CreateUserDto } from './dto';
 import { UsersService } from './users.service';
+import { PaginationQueryDto } from '../common';
+
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  async create(@Body() body: { email: string; password: string; name: string }) {
-    return this.usersService.create(body);
+  create(@Body() dto: CreateUserDto) {
+    return this.usersService.create(dto);
   }
 
   @Get()
-  async findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.usersService.findAll(query);
   }
 
 //   @Get('paginated')

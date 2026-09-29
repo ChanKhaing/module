@@ -10,19 +10,22 @@ import { TicketsModule } from './tickets/tickets.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SupportModule } from './support/support.module';
-import { RequestIdMiddleware } from './common/middleware';
+import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
+import { HealthModule } from './health/health.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
+  // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
     // ObserveModule.forRoot({
     //   appKey: 'YOUR_APP_KEY',
     //   appSecret: 'YOUR_APP_SECRET',
     //   serviceId: 'backend',
         ConfigModule.forRoot({ isGlobal: true }),
+        LoggerModule,
+        SharedModule,
         //  MongoDB ချိတ်
         MongooseModule.forRootAsync({
           inject: [ConfigService],
@@ -30,7 +33,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
           uri: config.get<string>('MONGO_URI'),
           }),
         }),
-
+      HealthModule,
     // }),
   UsersModule,
     AuthModule,

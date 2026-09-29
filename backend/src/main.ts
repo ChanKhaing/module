@@ -1,13 +1,19 @@
 import { AppModule, ObserveInstrument } from './app.module';
 import { NestFactory,Reflector } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import {
   AllExceptionsFilter,
+  LoggerService,
   ResponseInterceptor,
 } from './common';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule,{
+        bufferLogs: true,                    // ← startup logs ကို buffer
+
+  });
+    const logger = app.get(LoggerService);
+    app.useLogger(logger);       
   const reflector = app.get(Reflector);
 
   // ─── Interceptor (အရင်) ───
@@ -36,7 +42,7 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  Logger.log(`🚀 Server running on http://localhost:${port}`, 'Bootstrap');
+  logger.log(`🚀 Server running on http://localhost:${port}`, 'Bootstrap');
 
 }
 void bootstrap();
