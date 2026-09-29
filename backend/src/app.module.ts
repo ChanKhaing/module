@@ -11,6 +11,7 @@ import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SupportModule } from './support/support.module';
 import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
+import { HealthModule } from './health/health.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -32,7 +33,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
           uri: config.get<string>('MONGO_URI'),
           }),
         }),
-
+      HealthModule,
     // }),
   UsersModule,
     AuthModule,
