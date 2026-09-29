@@ -1,9 +1,20 @@
-import { NestFactory } from '@nestjs/core';
+import { AppModule, ObserveInstrument } from './app.module';
+import { NestFactory,Reflector } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { AppModule } from './app.module';
+import {
+  AllExceptionsFilter,
+  ResponseInterceptor,
+} from './common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const reflector = app.get(Reflector);
+
+  // ─── Interceptor (အရင်) ───
+  app.useGlobalInterceptors(new ResponseInterceptor(reflector));
+
+    // ─── Global Exception Filter  ───
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // ─── Global Validation Pipe ───
   app.useGlobalPipes(
@@ -22,10 +33,17 @@ async function bootstrap() {
     }),
   );
 
+
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-
   Logger.log(`🚀 Server running on http://localhost:${port}`, 'Bootstrap');
-}
 
-bootstrap();
+}
+void bootstrap();
+
+
+// 1. Interceptor  → response wrap
+// 2. Filter       → error catch
+// 3. Pipe         → validation
+
+// Filter က Interceptor ရဲ့ error ကို ဖမ်းမယ်။
