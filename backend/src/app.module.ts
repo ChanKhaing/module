@@ -10,7 +10,7 @@ import { TicketsModule } from './tickets/tickets.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SupportModule } from './support/support.module';
-import { LoggerModule, RequestIdMiddleware } from './common';
+import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -24,6 +24,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     //   serviceId: 'backend',
         ConfigModule.forRoot({ isGlobal: true }),
         LoggerModule,
+        SharedModule,
         //  MongoDB ချိတ်
         MongooseModule.forRootAsync({
           inject: [ConfigService],
