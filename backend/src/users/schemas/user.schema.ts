@@ -12,16 +12,19 @@ export enum UserRole {
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
-  email: string;
+  email!: string;
 
-  @Prop({ required: true })
-  password: string;
+  @Prop({ required: true, select: false })  
+  password!: string;
 
   @Prop({ required: true, trim: true })
-  name: string;
+  fullName!: string;
+
+  @Prop({ trim: true })
+  phone?: string;
 
   @Prop({ enum: UserRole, default: UserRole.CUSTOMER })
-  role: UserRole;
+  role!: UserRole;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -14,4 +14,9 @@ export class UsersController {
   async findAll() {
     return this.usersService.findAll();
   }
+
+//   @Get('paginated')
+// findPaginated() {
+//   return { data: [{ id: 1 }, { id: 2 }], total: 100, page: 1, limit: 20 };
+// }
 }

@@ -1,0 +1,1 @@
+export * from './skip-wrap.decorator';
