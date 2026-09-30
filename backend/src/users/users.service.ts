@@ -22,9 +22,15 @@ export class UsersService {
       throw new ConflictException('Email already registered');
     }
 
-    const user = await this.userModel.create(dto);
-    const obj = user.toObject();
-    delete (obj as any).password;
+ const user = await this.userModel.create({
+    email: dto.email,
+    passwordHash: dto.password,       // ← name ပြောင်း
+    fullName: dto.fullName,
+    phone: dto.phone,
+    role: dto.role,
+  });
+      const obj = user.toObject();
+    delete (obj as any).passwordHash;
 
     // this.logger.log(`User created: ${user._id}`, UsersService.name);
     return obj;

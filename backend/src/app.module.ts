@@ -12,7 +12,8 @@ import { PaymentsModule } from './payments/payments.module';
 import { SupportModule } from './support/support.module';
 import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
 import { HealthModule } from './health/health.module';
-
+import {  RolesModule } from './roles/roles.module';
+import { PermissionsModule } from './permissions/permissions.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
@@ -23,6 +24,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     //   appKey: 'YOUR_APP_KEY',
     //   appSecret: 'YOUR_APP_SECRET',
     //   serviceId: 'backend',
+    PermissionsModule,
+    RolesModule,
+     UsersModule,
+
         ConfigModule.forRoot({ isGlobal: true }),
         LoggerModule,
         SharedModule,
