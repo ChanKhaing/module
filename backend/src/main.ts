@@ -7,6 +7,7 @@ import {
   ResponseInterceptor,
 } from './common';
 
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule,{
         bufferLogs: true,                    // ← startup logs ကို buffer
@@ -15,7 +16,7 @@ async function bootstrap() {
     const logger = app.get(LoggerService);
     app.useLogger(logger);       
   const reflector = app.get(Reflector);
-
+    // ⚠️ Order အရေးကြီး
   // ─── Interceptor (အရင်) ───
   app.useGlobalInterceptors(new ResponseInterceptor(reflector));
 

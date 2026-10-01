@@ -4,7 +4,7 @@ import {
   HealthCheckService,
   MongooseHealthIndicator,
 } from '@nestjs/terminus';
-import { SkipWrap } from '../common';
+import { Public, SkipWrap } from '../common';
 
 @Controller('health')
 export class HealthController {
@@ -18,6 +18,9 @@ export class HealthController {
    * → 200 { status: "ok", info: { mongodb: { status: "up" } }, ... }
    * → 503 DB သေရင်
    */
+  
+
+  @Public()
   @Get()
   @SkipWrap()                        // ← wrap မလုပ် (monitoring tool raw လိုတယ်)
   @HealthCheck()
@@ -32,8 +35,8 @@ export class HealthController {
    * → Kubernetes liveness probe
    * → Server process ရှင်လား (DB မပါ)
    */
-
-    @Get('info')
+  @Public()
+  @Get('info')
   @SkipWrap()
   info() {
     const mem = process.memoryUsage();
@@ -49,18 +52,22 @@ export class HealthController {
     };
   }
 
-
+  @Public()
   @Get('live')
   @SkipWrap()
   live() {
     return { status: 'ok' };
   }
 
+}
   /**
    * GET /health/ready
    * → Kubernetes readiness probe
    * → Traffic လက်ခံဖို့ အသင့်လား (DB ပါ)
-   */
+  
+  
+  
+  @Public() 
   @Get('ready')
   @SkipWrap()
   @HealthCheck()
@@ -69,4 +76,4 @@ export class HealthController {
       () => this.mongoose.pingCheck('mongodb', { timeout: 3000 }),
     ]);
   }
-}
+}*/

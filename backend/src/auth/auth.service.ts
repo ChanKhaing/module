@@ -14,7 +14,7 @@ import { PasswordService } from '../common/security';
 import { LoggerService, IdService } from '../common';
 import { RedisService, RedisKeys, RedisTTL } from '../infra/redis';
 
-import { RegisterDto, LoginDto } from './dto';
+import { RegisterDto, LoginDto ,RefreshDto , LogoutDto } from './dto';
 import { JwtPayload, TokenPair } from './interfaces';
 
 @Injectable()
@@ -107,6 +107,122 @@ export class AuthService {
       user: this.sanitize(user),
       ...tokens,
     };
+  }
+
+  // ─────────────────────────────────────────
+  // REFRESH (rotation)
+  // ─────────────────────────────────────────
+  async refresh(dto: RefreshDto): Promise<TokenPair> {
+    // 1. Verify JWT
+    const payload = await this.verifyRefreshToken(dto.refreshToken);
+
+    // 2. Session ရှိလား
+    const sessionKey = RedisKeys.session(payload.sub, payload.jti);
+    const exists = await this.redis.exists(sessionKey);
+
+    if (!exists) {
+      // ⚠️ Token reuse detected!
+      // Old token ကို ပြန် သုံးနေတယ် → attacker ဖြစ်နိုင်
+      // → User ရဲ့ session အားလုံး ဖျက် (defensive)
+      await this.redis.delByPattern(`session:${payload.sub}:*`);
+
+      this.logger.warn(
+        `Token reuse detected: user=${payload.sub} jti=${payload.jti}`,
+        AuthService.name,
+      );
+
+      throw new UnauthorizedException({
+        code: 'AUTH_REFRESH_TOKEN_REUSED',
+        message: 'Refresh token has been revoked. Please login again.',
+      });
+    }
+
+    // 3. User ရှိသေးလား + active လား
+    const user = await this.userModel.findById(payload.sub).exec();
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      await this.redis.del(sessionKey);
+      throw new UnauthorizedException({
+        code: 'AUTH_USER_INVALID',
+        message: 'User not found or inactive',
+      });
+    }
+
+    // 4. Old session ဖျက် (rotation)
+    await this.redis.del(sessionKey);
+
+    // 5. Token pair အသစ်
+    const tokens = await this.issueTokens(user);
+
+    this.logger.log(`Token refreshed: ${user.email}`, AuthService.name);
+
+    return tokens;
+  }
+
+  // ─────────────────────────────────────────
+  // LOGOUT (single session)
+  // ─────────────────────────────────────────
+  async logout(dto: LogoutDto): Promise<{ message: string }> {
+    // Invalid token ဖြစ်လည်း success ပြ (idempotent)
+    try {
+      const payload = await this.verifyRefreshToken(dto.refreshToken);
+      const sessionKey = RedisKeys.session(payload.sub, payload.jti);
+      await this.redis.del(sessionKey);
+
+      this.logger.log(
+        `Logged out: user=${payload.sub} jti=${payload.jti}`,
+        AuthService.name,
+      );
+    } catch {
+      // Token invalid/expired → session ဖျက်စရာ မလို
+      // Client ကို "already logged out" ပြ
+    }
+
+    return { message: 'Logged out successfully' };
+  }
+
+  // ─────────────────────────────────────────
+  // LOGOUT ALL DEVICES
+  // ─────────────────────────────────────────
+  async logoutAll(userId: string): Promise<{ message: string; revoked: number }> {
+    const pattern = RedisKeys.userSessions(userId);
+    const revoked = await this.redis.delByPattern(pattern);
+
+    this.logger.log(
+      `Logged out all: user=${userId} revoked=${revoked}`,
+      AuthService.name,
+    );
+
+    return {
+      message: 'Logged out from all devices',
+      revoked,
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // VERIFY REFRESH TOKEN (helper)
+  // ─────────────────────────────────────────
+  private async verifyRefreshToken(token: string): Promise<JwtPayload> {
+    let payload: JwtPayload;
+
+    try {
+      payload = await this.jwt.verifyAsync<JwtPayload>(token, {
+        secret: this.config.get<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException({
+        code: 'AUTH_INVALID_REFRESH_TOKEN',
+        message: 'Refresh token is invalid or expired',
+      });
+    }
+
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException({
+        code: 'AUTH_INVALID_TOKEN_TYPE',
+        message: 'Invalid token type',
+      });
+    }
+
+    return payload;
   }
 
   // ─────────────────────────────────────────

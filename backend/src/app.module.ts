@@ -17,6 +17,13 @@ import { PermissionsModule } from './permissions/permissions.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 import { SecurityModule } from './common/security';
 import { RedisModule } from './infra/redis';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
+import { JwtAuthGuard } from './common';
+import type { StringValue } from 'ms';
+import { PassportModule } from '@nestjs/passport';
+
+
 @Module({
 imports: [
     // Configuration
@@ -30,6 +37,18 @@ imports: [
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         uri: config.get<string>('MONGO_URI'),
+      }),
+    }),
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.registerAsync({
+      global: true,                    // ← global ဖြစ်စေ
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): JwtModuleOptions => ({
+        secret: config.get<string>('JWT_ACCESS_SECRET'),
+        signOptions: {
+          expiresIn: (config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m') as StringValue,
+        },
       }),
     }),
 
@@ -53,7 +72,12 @@ imports: [
     SupportModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService,
+    {
+    provide: APP_GUARD,
+    useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
