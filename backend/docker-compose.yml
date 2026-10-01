@@ -1,5 +1,5 @@
 services:
-  mongo:
+  mongodb:
     image: mongo:7
     container_name: ticket-mongo
     restart: unless-stopped
@@ -9,6 +9,14 @@ services:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin123
     volumes:
-      # ဒီနေရာမှာ Desktop လမ်းကြောင်းကို ထည့်ပေးလိုက်ပါ
       - ~/Desktop/my_mongo_data:/data/db
 
+  redis:
+    image: redis:7-alpine
+    container_name: ticket-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ~/Desktop/my_redis_data:/data
+    command: redis-server --appendonly yes

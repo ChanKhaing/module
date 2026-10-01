@@ -15,37 +15,43 @@ import { HealthModule } from './health/health.module';
 import {  RolesModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
-
+import { SecurityModule } from './common/security';
+import { RedisModule } from './infra/redis';
 @Module({
-  imports: [
-  // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    // ObserveModule.forRoot({
-    //   appKey: 'YOUR_APP_KEY',
-    //   appSecret: 'YOUR_APP_SECRET',
-    //   serviceId: 'backend',
+imports: [
+    // Configuration
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+
+    // Database Connection
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('MONGO_URI'),
+      }),
+    }),
+
+    // Infrastructure & Common Modules
+    RedisModule,
+    SecurityModule,
+    LoggerModule,
+    SharedModule,
+    HealthModule,
+
+    // Core RBAC Modules
     PermissionsModule,
     RolesModule,
-     UsersModule,
 
-        ConfigModule.forRoot({ isGlobal: true }),
-        LoggerModule,
-        SharedModule,
-        //  MongoDB ချိတ်
-        MongooseModule.forRootAsync({
-          inject: [ConfigService],
-          useFactory: (config: ConfigService) => ({
-          uri: config.get<string>('MONGO_URI'),
-          }),
-        }),
-      HealthModule,
-    // }),
-  UsersModule,
+    // Feature Modules
+    UsersModule,
     AuthModule,
     TicketsModule,
     OrdersModule,
     PaymentsModule,
-    SupportModule],
+    SupportModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
