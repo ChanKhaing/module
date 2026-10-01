@@ -13,16 +13,7 @@ import { AuthService } from './auth.service';
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
 
     // JWT — secret ကို service ကနေ pass လုပ်မယ်
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_ACCESS_SECRET')!,
-        signOptions: {
-          expiresIn: (config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m') as any,
-        },
-      }),
-    }),
+   
   ],
   controllers: [AuthController],
   providers: [AuthService],

@@ -1,8 +1,8 @@
-import { Injectable, ConflictException , Logger } from '@nestjs/common';
+import { Injectable, ConflictException , Logger , NotFoundException} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
-import { CreateUserDto } from './dto';
+import { CreateUserDto , UpdateProfileDto} from './dto';
 import { LoggerService, PaginationService, PaginationQueryDto } from '../common';  //custom 
 import { PasswordService } from '../common/security';
 
@@ -75,6 +75,44 @@ export class UsersService {
       .lean()
       .exec();
   }
+
+  async findById(id: string) {
+  const user = await this.userModel
+    .findById(id)
+    .select('-passwordHash')
+    .lean()
+    .exec();
+
+  if (!user) {
+    throw new NotFoundException({
+      code: 'USER_NOT_FOUND',
+      message: 'User not found',
+    });
+  }
+
+  return user;
+}
+
+async updateProfile(userId: string, dto: UpdateProfileDto) {
+  const user = await this.userModel
+    .findByIdAndUpdate(
+      userId,
+      { $set: dto },
+      { new: true, runValidators: true },
+    )
+    .select('-passwordHash')
+    .lean()
+    .exec();
+
+  if (!user) {
+    throw new NotFoundException({
+      code: 'USER_NOT_FOUND',
+      message: 'User not found',
+    });
+  }
+
+  return user;
+}
 
   async findByEmail(email: string, withPassword = false) {
     const query = this.userModel.findOne({ email });
