@@ -4,10 +4,9 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
-  IsEnum,
   Matches,
+  IsMongoId,
 } from 'class-validator';
-import { UserRole } from '../schemas/user.schema';
 
 export class CreateUserDto {
   @IsEmail({}, { message: 'email must be a valid email address' })
@@ -30,9 +29,10 @@ export class CreateUserDto {
   })
   phone?: string;                             // ← phone အသစ်
 
+  // ⚠️ role enum → roleId ObjectId
   @IsOptional()
-  @IsEnum(UserRole, { message: 'role must be customer/agent/admin' })
-  role?: UserRole;
+  @IsMongoId({ message: 'roleId must be a valid ObjectId' })
+  roleId?: string;
 }
 
 // export class CreateUserDto {

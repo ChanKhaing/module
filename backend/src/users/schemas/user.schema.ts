@@ -1,13 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export type UserDocument = HydratedDocument<User>;
-
-export enum UserRole {
-  CUSTOMER = 'customer',
-  AGENT = 'agent',
-  ADMIN = 'admin',
-}
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -22,10 +16,10 @@ export enum AuthProvider {
 
 @Schema({ timestamps: true, collection: 'users' })
 export class User {
-  @Prop({ required: true, unique: true, lowercase: true, trim: true  ,index: true })
+  @Prop({ required: true, unique: true, lowercase: true, trim: true, index: true })
   email!: string;
 
- @Prop({ select: false })
+  @Prop({ select: false })
   passwordHash?: string;
 
   @Prop({ required: true, trim: true })
@@ -37,28 +31,32 @@ export class User {
   @Prop({ trim: true })
   avatarUrl?: string;
 
-  @Prop({ enum: UserRole, default: UserRole.CUSTOMER })
-  role!: UserRole;
-  // ─── Auth ───
+  // ⚠️ enum → ObjectId ref
+  @Prop({
+    type: Types.ObjectId,
+    ref: 'Role',
+    required: true,
+    index: true,
+  })
+  role!: Types.ObjectId;
+
   @Prop({ enum: AuthProvider, default: AuthProvider.LOCAL })
   provider!: AuthProvider;
 
   @Prop({ trim: true })
-  providerId?: string;               // Google sub
+  providerId?: string;
 
   @Prop({ default: false })
   emailVerified!: boolean;
 
-  // ─── Status ───
   @Prop({ enum: UserStatus, default: UserStatus.ACTIVE })
   status!: UserStatus;
 
-  // ─── Tracking ───
   @Prop()
   lastLoginAt?: Date;
 
   @Prop()
-  deletedAt?: Date;   
+  deletedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
