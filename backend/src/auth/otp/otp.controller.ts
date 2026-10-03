@@ -11,13 +11,17 @@ import { Public } from '../../common';
 @Controller('auth/otp')
 export class OtpController {
   constructor(private readonly otp: OtpService) {}
-
+  
+  @Public()
   @Post('request')
   @HttpCode(HttpStatus.OK)
   request(@Body() dto: RequestOtpDto) {
     return this.otp.requestOtp(dto.email);
   }
+  
 
+  
+  @Public()
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   verify(@Body() dto: VerifyOtpDto) {

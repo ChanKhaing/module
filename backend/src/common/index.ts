@@ -7,3 +7,4 @@ export * from './dto';
 export * from './logger';
 export * from './shared';
 export * from './exceptions';
+export * from './exceptions/business.exception';

@@ -22,6 +22,8 @@ import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
 import { JwtAuthGuard } from './common';
 import type { StringValue } from 'ms';
 import { PassportModule } from '@nestjs/passport';
+import { MailModule } from './infra/mail/mail.module';
+
 
 
 @Module({
@@ -53,6 +55,7 @@ imports: [
     }),
 
     // Infrastructure & Common Modules
+    MailModule,
     RedisModule,
     SecurityModule,
     LoggerModule,
