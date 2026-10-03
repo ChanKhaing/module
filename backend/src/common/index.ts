@@ -6,3 +6,4 @@ export * from './guards';
 export * from './dto';
 export * from './logger';
 export * from './shared';
+export * from './exceptions';
