@@ -32,7 +32,7 @@ export class PasswordResetService {
   }> {
     const user = await this.userModel.findOne({ email }).exec();
 
-    // ⚠️ Email enumeration block — user ရှိလည်း၊ မရှိလည်း တူညီတဲ့ response
+    // ⚠️ Email enumeration block
     if (!user) {
       this.logger.warn(
         `Reset requested for unknown email: ${email}`,
@@ -45,10 +45,9 @@ export class PasswordResetService {
       };
     }
 
-    // User status စစ် (banned/inactive user ကို reset ခွင့်မပြု)
     if (user.status !== 'active') {
       this.logger.warn(
-        `Reset requested for inactive/banned user: ${email}`,
+        `Reset requested for inactive user: ${email}`,
         PasswordResetService.name,
       );
 
@@ -58,19 +57,15 @@ export class PasswordResetService {
       };
     }
 
-    // Reset token generate (crypto random 32 bytes → 64 hex chars)
+    // Token: 32 bytes → 64 hex chars
     const token = randomBytes(32).toString('hex');
     const key = RedisKeys.resetToken(token);
 
-    // Redis store: token → userId
     await this.redis.set(key, user._id.toString(), RedisTTL.RESET_TOKEN);
 
-    // Frontend reset URL (prod မှာ domain ပြောင်း)
-    const frontendUrl =
-      process.env.FRONTEND_URL ?? 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
-    // Email
     const tpl = resetPasswordTemplate({
       fullName: user.fullName,
       resetLink,
@@ -84,10 +79,7 @@ export class PasswordResetService {
       text: tpl.text,
     });
 
-    this.logger.log(
-      `Password reset link sent: ${email}`,
-      PasswordResetService.name,
-    );
+    this.logger.log(`Password reset link sent: ${email}`, PasswordResetService.name);
 
     return {
       message: 'If the email exists, a reset link has been sent.',
@@ -104,7 +96,6 @@ export class PasswordResetService {
   ): Promise<{ message: string }> {
     const key = RedisKeys.resetToken(token);
 
-    // 1. Token ရှိလား
     const userId = await this.redis.get(key);
     if (!userId) {
       throw new BadRequestException({
@@ -113,28 +104,23 @@ export class PasswordResetService {
       });
     }
 
-    // 2. User ရှိလား
     const user = await this.userModel.findById(userId).exec();
     if (!user) {
-      await this.redis.del(key);       // cleanup
+      await this.redis.del(key);
       throw new BadRequestException({
         code: 'RESET_TOKEN_INVALID',
         message: 'Reset token is invalid or has expired',
       });
     }
 
-    // 3. Password hash
     const passwordHash = await this.password.hash(newPassword);
 
-    // 4. User update
     user.passwordHash = passwordHash;
     await user.save();
 
-    // 5. Token ဖျက် (single-use)
     await this.redis.del(key);
 
-    // 6. ⚠️ Security: Session အားလုံး ဖျက်
-    //    (Attacker token ခိုးပြီး reset လုပ်ရင် user ရဲ့ session ဖျက်)
+    // Session အားလုံး ဖျက်
     const sessionPattern = RedisKeys.userSessions(userId);
     const revoked = await this.redis.delByPattern(sessionPattern);
 

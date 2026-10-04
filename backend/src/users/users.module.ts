@@ -5,11 +5,14 @@ import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { JwtModule } from '@nestjs/jwt'; 
 import { AuthModule } from '../auth/auth.module';
+import { Role, RoleSchema } from '../roles/schemas/role.schema';   // ← လိုတယ်
+
 @Module({
   imports: [
     JwtModule.register({}),
     AuthModule,
     MongooseModule.forFeature([
+      { name: Role.name, schema: RoleSchema },        // ← ဒါ ပါလား
       { name: User.name, schema: UserSchema },
     ]),
   ],

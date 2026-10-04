@@ -1,16 +1,19 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+
 import { PasswordResetService } from './password-reset.service';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto';
 import { Public } from '../../common';
+
 @Controller('auth')
 export class PasswordResetController {
-  constructor(private readonly passwordResetService: PasswordResetService) {}
+  constructor(private readonly passwordReset: PasswordResetService) {}  
+  
 
   @Public()
   @Post('forgot')
   @HttpCode(HttpStatus.OK)
   forgot(@Body() dto: ForgotPasswordDto) {
-    return this.passwordResetService.requestReset(dto.email);
+    return this.passwordReset.requestReset(dto.email);                  // ← ပြောင်း
   }
 
   @Public()

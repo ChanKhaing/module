@@ -1,20 +1,27 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
-import { OtpModule } from './otp/otp.module';
 
 import { User, UserSchema } from '../users/schemas/user.schema';
+import { Role, RoleSchema } from '../roles/schemas/role.schema';
+
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+
+import { OtpModule } from './otp/otp.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
+import { PasswordResetModule } from './password-reset/password-reset.module';
+
 
 
 @Module({
   imports: [
-    // User model
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
-    // OTP feature
+    // ─── Models ───
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: Role.name, schema: RoleSchema },          // ← AuthService က roleModel inject လို့
+    ]),
+
+    // ─── Sub-features ───
     OtpModule,
     PasswordResetModule,
     // JWT – secret will be provided by service

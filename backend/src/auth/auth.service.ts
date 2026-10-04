@@ -10,17 +10,24 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
 import { User, UserDocument, UserStatus } from '../users/schemas/user.schema';
+import {
+  Role,
+  RoleDocument,
+  RoleName,
+} from '../roles/schemas/role.schema';                    // ← Role ထည့်
+
 import { PasswordService } from '../common/security';
 import { LoggerService, IdService } from '../common';
 import { RedisService, RedisKeys, RedisTTL } from '../infra/redis';
 
-import { RegisterDto, LoginDto ,RefreshDto , LogoutDto } from './dto';
+import { RegisterDto, LoginDto, RefreshDto, LogoutDto } from './dto';
 import { JwtPayload, TokenPair } from './interfaces';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,  // ← ဒါ ထည့်
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly password: PasswordService,
@@ -33,9 +40,18 @@ export class AuthService {
   // REGISTER
   // ─────────────────────────────────────────
   async register(dto: RegisterDto) {
-    const exists = await this.userModel.findOne({ email: dto.email });
+    const exists = await this.userModel.findOne({ email: dto.email }).exec();
     if (exists) {
       throw new ConflictException('Email already registered');
+    }
+
+    // Customer role ရှာ
+    const customerRole = await this.roleModel
+      .findOne({ name: RoleName.CUSTOMER })
+      .exec();
+
+    if (!customerRole) {
+      throw new Error('Default customer role not found. Run seed first.');
     }
 
     const passwordHash = await this.password.hash(dto.password);
@@ -45,6 +61,7 @@ export class AuthService {
       passwordHash,
       fullName: dto.fullName,
       phone: dto.phone,
+      role: customerRole._id,
       emailVerified: false,
     });
 
@@ -53,7 +70,7 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
 
     return {
-      user: this.sanitize(user),
+      user: await this.sanitize(user),
       ...tokens,
     };
   }
@@ -104,7 +121,7 @@ export class AuthService {
     const tokens = await this.issueTokens(user);
 
     return {
-      user: this.sanitize(user),
+      user: await this.sanitize(user),
       ...tokens,
     };
   }
@@ -113,17 +130,12 @@ export class AuthService {
   // REFRESH (rotation)
   // ─────────────────────────────────────────
   async refresh(dto: RefreshDto): Promise<TokenPair> {
-    // 1. Verify JWT
     const payload = await this.verifyRefreshToken(dto.refreshToken);
 
-    // 2. Session ရှိလား
     const sessionKey = RedisKeys.session(payload.sub, payload.jti);
     const exists = await this.redis.exists(sessionKey);
 
     if (!exists) {
-      // ⚠️ Token reuse detected!
-      // Old token ကို ပြန် သုံးနေတယ် → attacker ဖြစ်နိုင်
-      // → User ရဲ့ session အားလုံး ဖျက် (defensive)
       await this.redis.delByPattern(`session:${payload.sub}:*`);
 
       this.logger.warn(
@@ -137,7 +149,6 @@ export class AuthService {
       });
     }
 
-    // 3. User ရှိသေးလား + active လား
     const user = await this.userModel.findById(payload.sub).exec();
     if (!user || user.status !== UserStatus.ACTIVE) {
       await this.redis.del(sessionKey);
@@ -147,10 +158,8 @@ export class AuthService {
       });
     }
 
-    // 4. Old session ဖျက် (rotation)
     await this.redis.del(sessionKey);
 
-    // 5. Token pair အသစ်
     const tokens = await this.issueTokens(user);
 
     this.logger.log(`Token refreshed: ${user.email}`, AuthService.name);
@@ -159,10 +168,9 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────
-  // LOGOUT (single session)
+  // LOGOUT
   // ─────────────────────────────────────────
   async logout(dto: LogoutDto): Promise<{ message: string }> {
-    // Invalid token ဖြစ်လည်း success ပြ (idempotent)
     try {
       const payload = await this.verifyRefreshToken(dto.refreshToken);
       const sessionKey = RedisKeys.session(payload.sub, payload.jti);
@@ -173,15 +181,14 @@ export class AuthService {
         AuthService.name,
       );
     } catch {
-      // Token invalid/expired → session ဖျက်စရာ မလို
-      // Client ကို "already logged out" ပြ
+      // Invalid token → ignore
     }
 
     return { message: 'Logged out successfully' };
   }
 
   // ─────────────────────────────────────────
-  // LOGOUT ALL DEVICES
+  // LOGOUT ALL
   // ─────────────────────────────────────────
   async logoutAll(userId: string): Promise<{ message: string; revoked: number }> {
     const pattern = RedisKeys.userSessions(userId);
@@ -199,7 +206,7 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────
-  // VERIFY REFRESH TOKEN (helper)
+  // VERIFY REFRESH
   // ─────────────────────────────────────────
   private async verifyRefreshToken(token: string): Promise<JwtPayload> {
     let payload: JwtPayload;
@@ -226,15 +233,22 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────
-  // TOKEN ISSUE
+  // ISSUE TOKENS
   // ─────────────────────────────────────────
   private async issueTokens(user: UserDocument): Promise<TokenPair> {
+    // ─── Role populate (already populated ဖြစ်နိုင်လည်း safe) ───
+    if (!(user.role as any)?.name) {
+      await user.populate<{ role: RoleDocument }>('role');
+    }
+    const roleName =
+      (user.role as unknown as RoleDocument)?.name ?? RoleName.CUSTOMER;
+
     const jti = this.id.uuid();
 
     const accessPayload: JwtPayload = {
       sub: user._id.toString(),
       email: user.email,
-      role: user.role,
+      role: roleName,
       jti,
       type: 'access',
     };
@@ -244,21 +258,22 @@ export class AuthService {
       type: 'refresh',
     };
 
-    const accessExpiresIn = 15 * 60;              // 15m in seconds
-    const refreshExpiresIn = 7 * 24 * 60 * 60;    // 7d in seconds
+    const accessExpiresIn = 15 * 60;
+    const refreshExpiresIn = 7 * 24 * 60 * 60;
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(accessPayload, {
-        secret: this.config.get<string>('JWT_ACCESS_SECRET')!, // ← ! ထည့်
-        expiresIn: (this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m') as any, // ← as any ထည့်
+        secret: this.config.get<string>('JWT_ACCESS_SECRET')!,
+        expiresIn: (this.config.get<string>('JWT_ACCESS_EXPIRES_IN') ??
+          '15m') as any,
       }),
       this.jwt.signAsync(refreshPayload, {
-        secret: this.config.get<string>('JWT_REFRESH_SECRET')!, // ← ! ထည့်
-        expiresIn: (this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d') as any, // ← as any ထည့်
+        secret: this.config.get<string>('JWT_REFRESH_SECRET')!,
+        expiresIn: (this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ??
+          '7d') as any,
       }),
     ]);
 
-    // ─── Session ကို Redis မှာ သိမ်း ───
     const sessionKey = RedisKeys.session(user._id.toString(), jti);
     await this.redis.set(sessionKey, '1', RedisTTL.SESSION);
 
@@ -273,12 +288,19 @@ export class AuthService {
   // ─────────────────────────────────────────
   // SANITIZE
   // ─────────────────────────────────────────
-  private sanitize(user: UserDocument) {
+  private async sanitize(user: UserDocument) {
+    // Populate (already populated ဖြစ်နိုင်လည်း safe)
+    if (!(user.role as any)?.name) {
+      await user.populate<{ role: RoleDocument }>('role');
+    }
+    const roleName =
+      (user.role as unknown as RoleDocument)?.name ?? null;
+
     return {
       id: user._id.toString(),
       email: user.email,
       fullName: user.fullName,
-      role: user.role,
+      role: roleName,               // ← ✅ roleName (string)
       status: user.status,
       emailVerified: user.emailVerified,
     };
