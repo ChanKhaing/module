@@ -11,3 +11,5 @@ export class ResetPasswordDto {
   @MaxLength(64)
   newPassword!: string;
 }
+
+

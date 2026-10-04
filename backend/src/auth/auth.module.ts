@@ -6,8 +6,12 @@ import { Role, RoleSchema } from '../roles/schemas/role.schema';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+
 import { OtpModule } from './otp/otp.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
+import { PasswordResetModule } from './password-reset/password-reset.module';
+
+
 
 @Module({
   imports: [
@@ -20,6 +24,8 @@ import { PasswordResetModule } from './password-reset/password-reset.module';
     // ─── Sub-features ───
     OtpModule,
     PasswordResetModule,
+    // JWT – secret will be provided by service
+    // (no additional JWT config needed here)
   ],
   controllers: [AuthController],
   providers: [AuthService],

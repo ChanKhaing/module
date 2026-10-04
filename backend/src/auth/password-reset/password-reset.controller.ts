@@ -6,7 +6,8 @@ import { Public } from '../../common';
 
 @Controller('auth')
 export class PasswordResetController {
-  constructor(private readonly passwordReset: PasswordResetService) {}   // ← ပြောင်း
+  constructor(private readonly passwordReset: PasswordResetService) {}  
+  
 
   @Public()
   @Post('forgot')
@@ -19,6 +20,6 @@ export class PasswordResetController {
   @Post('reset')
   @HttpCode(HttpStatus.OK)
   reset(@Body() dto: ResetPasswordDto) {
-    return this.passwordReset.resetPassword(dto.token, dto.newPassword); // ← ပြောင်း
+    return this.passwordResetService.resetPassword(dto.token, dto.newPassword);
   }
 }
