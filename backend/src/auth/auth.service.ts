@@ -14,7 +14,7 @@ import {
   Role,
   RoleDocument,
   RoleName,
-} from '../roles/schemas/role.schema';                    // ← Role ထည့်
+} from '../roles/schemas/role.schema';                  
 
 import { PasswordService } from '../common/security';
 import { LoggerService, IdService } from '../common';
@@ -236,12 +236,25 @@ export class AuthService {
   // ISSUE TOKENS
   // ─────────────────────────────────────────
   private async issueTokens(user: UserDocument): Promise<TokenPair> {
-    // ─── Role populate (already populated ဖြစ်နိုင်လည်း safe) ───
-    if (!(user.role as any)?.name) {
-      await user.populate<{ role: RoleDocument }>('role');
-    }
-    const roleName =
-      (user.role as unknown as RoleDocument)?.name ?? RoleName.CUSTOMER;
+    // ─── Deep populate: role → permissions ───
+    await user.populate({
+      path: 'role',
+      populate: {
+        path: 'permissions',
+        select: 'code',
+      },
+    });
+
+    const roleDoc = user.role as unknown as
+      | (RoleDocument & { permissions?: Array<{ code: string }> })
+      | null;
+
+    const roleName = roleDoc?.name ?? RoleName.CUSTOMER;
+
+    // ↓↓↓ FIX: cast each element ↓↓↓
+    const permissions = (roleDoc?.permissions ?? []).map(
+      (p) => (p as unknown as { code: string }).code,
+    );
 
     const jti = this.id.uuid();
 
@@ -249,6 +262,7 @@ export class AuthService {
       sub: user._id.toString(),
       email: user.email,
       role: roleName,
+      permissions,
       jti,
       type: 'access',
     };

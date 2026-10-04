@@ -2,7 +2,7 @@
 import { Body, Controller, Get, Post,Query, Patch } from '@nestjs/common';
 import { CreateUserDto, UpdateProfileDto } from './dto';
 import { UsersService } from './users.service';
-import { PaginationQueryDto, CurrentUser, Public } from '../common';
+import { PaginationQueryDto, CurrentUser, Public, RequirePermissions } from '../common';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface'; // သို့မဟုတ် သက်ဆိုင်ရာ path
 
 
@@ -10,10 +10,21 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface'; // �
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+ 
+  // ─── Admin only ───
+  @RequirePermissions('user:create')
   @Post()
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
+
+  // ─── Admin only ───
+  @RequirePermissions('user:read')
+  @Get()
+  findAll(@Query() query: PaginationQueryDto) {
+    return this.usersService.findAll(query);
+  }
+
     // ─── Profile: current user ───
   // @Get('me')
   // me(@CurrentUser() user: JwtPayload) {
@@ -40,10 +51,10 @@ export class UsersController {
     return this.usersService.updateProfile(user.sub, dto);
   }
 
-  @Get()
-  findAll(@Query() query: PaginationQueryDto) {
-    return this.usersService.findAll(query);
-  }
+  // @Get()
+  // findAll(@Query() query: PaginationQueryDto) {
+  //   return this.usersService.findAll(query);
+  // }
 
 //   @Get('paginated')
 // findPaginated() {

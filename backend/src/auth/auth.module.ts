@@ -9,7 +9,7 @@ import { AuthService } from './auth.service';
 
 import { OtpModule } from './otp/otp.module';
 import { PasswordResetModule } from './password-reset/password-reset.module';
-import { PasswordResetModule } from './password-reset/password-reset.module';
+import { Permission, PermissionSchema } from '../permissions/schemas/permission.schema';   // ← အသစ်
 
 
 
@@ -18,7 +18,9 @@ import { PasswordResetModule } from './password-reset/password-reset.module';
     // ─── Models ───
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
-      { name: Role.name, schema: RoleSchema },          // ← AuthService က roleModel inject လို့
+      { name: Role.name, schema: RoleSchema },   
+      { name: Permission.name, schema: PermissionSchema },   // ← အသစ်
+       // ← AuthService က roleModel inject လို့
     ]),
 
     // ─── Sub-features ───

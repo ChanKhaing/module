@@ -61,11 +61,11 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     // 5. req.user ထည့်
-    request.user = {
+        request.user = {
       id: payload.sub,
       email: payload.email,
       roles: [payload.role],
-      permissions: [],
+      permissions: payload.permissions ?? [],      // ← ပြင်
     };
 
     return true;
