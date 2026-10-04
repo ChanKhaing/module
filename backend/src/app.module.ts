@@ -23,7 +23,7 @@ import { JwtAuthGuard } from './common';
 import type { StringValue } from 'ms';
 import { PassportModule } from '@nestjs/passport';
 import { MailModule } from './infra/mail/mail.module';
-
+import { SeedModule } from './seeds/seed.module';
 
 
 @Module({
@@ -73,6 +73,7 @@ imports: [
     OrdersModule,
     PaymentsModule,
     SupportModule,
+    SeedModule,
   ],
   controllers: [AppController],
   providers: [AppService,
