@@ -19,7 +19,7 @@ import { SecurityModule } from './common/security';
 import { RedisModule } from './infra/redis';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
-import { JwtAuthGuard } from './common';
+import { JwtAuthGuard, PermissionsGuard } from './common';
 import type { StringValue } from 'ms';
 import { PassportModule } from '@nestjs/passport';
 import { MailModule } from './infra/mail/mail.module';
@@ -76,12 +76,19 @@ imports: [
     SeedModule,
   ],
   controllers: [AppController],
-  providers: [AppService,
-    {
+ providers: [
+  AppService,
+
+  // Order အရေးကြီး — JwtAuthGuard အရင်၊ PermissionsGuard နောက်
+  {
     provide: APP_GUARD,
     useClass: JwtAuthGuard,
-    },
-  ],
+  },
+  {
+    provide: APP_GUARD,
+    useClass: PermissionsGuard,       // ← ဒါ ထည့်
+  },
+],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

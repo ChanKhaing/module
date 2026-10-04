@@ -654,7 +654,8 @@ main                                    ← stable
  ├── feat/pj03-auth-advanced            
  ├── feat/pj04-rbac-user
  ├── feat/pj05-ticket
- ├── feat/pj06-order
+ ├── feat/pj06-order  //
+
  ├── feat/pj07-payment
  ├── feat/pj08-purchased-ticket
  ├── feat/pj09-support
@@ -761,6 +762,7 @@ PORT=3001 npm run start:dev
 | PJ-04 | RBAC + User | ⏳ |
 | PJ-05 | Ticket Product | ⏳ |
 | PJ-06 | Order / Booking | ⏳ |
+
 | PJ-07 | Mock Payment | ⏳ |
 | PJ-08 | Purchased Ticket | ⏳ |
 | PJ-09 | Support (REST) | ⏳ |

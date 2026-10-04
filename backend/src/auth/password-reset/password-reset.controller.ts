@@ -20,6 +20,6 @@ export class PasswordResetController {
   @Post('reset')
   @HttpCode(HttpStatus.OK)
   reset(@Body() dto: ResetPasswordDto) {
-    return this.passwordResetService.resetPassword(dto.token, dto.newPassword);
+    return this.passwordReset.resetPassword(dto.token, dto.newPassword); // ← ပြောင်း
   }
 }
