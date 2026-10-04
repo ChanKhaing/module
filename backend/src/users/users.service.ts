@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -6,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
-import { User, UserDocument } from './schemas/user.schema';
+import { User, UserDocument, UserStatus } from './schemas/user.schema';
 import { Role, RoleDocument, RoleName } from '../roles/schemas/role.schema';
 import { CreateUserDto, UpdateProfileDto } from './dto';
 import {
@@ -168,5 +169,112 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  // ─── ADMIN: Update status ───
+  async updateStatus(id: string, status: UserStatus) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid user id' });
+    }
+
+    const user = await this.userModel
+      .findByIdAndUpdate(id, { $set: { status } }, { new: true, runValidators: true })
+      .populate('role', 'name description')
+      .select('-passwordHash')
+      .lean()
+      .exec();
+
+    if (!user) {
+      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    this.logger.log(`User status updated: ${user.email} → ${status}`, UsersService.name);
+    return user;
+  }
+
+  // ─── ADMIN: Assign role ───
+  async assignRole(userId: string, roleId: string) {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid user id' });
+    }
+    if (!Types.ObjectId.isValid(roleId)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid role id' });
+    }
+
+    const user = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $set: { role: new Types.ObjectId(roleId) } },
+        { new: true, runValidators: true },
+      )
+      .populate('role', 'name description')
+      .select('-passwordHash')
+      .lean()
+      .exec();
+
+    if (!user) {
+      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    this.logger.log(`Role assigned: ${user.email}`, UsersService.name);
+    return user;
+  }
+
+  // ─── ADMIN: Soft delete ───
+  async softDelete(id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid user id' });
+    }
+
+    const user = await this.userModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { deletedAt: new Date(), status: UserStatus.INACTIVE } },
+        { new: true },
+      )
+      .select('-passwordHash')
+      .lean()
+      .exec();
+
+    if (!user) {
+      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    this.logger.log(`User soft-deleted: ${user.email}`, UsersService.name);
+    return { message: 'User deleted successfully' };
+  }
+
+  // ─── SELF: Change password ───
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.userModel
+      .findById(userId)
+      .select('+passwordHash')
+      .exec();
+
+    if (!user || !user.passwordHash) {
+      throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    const valid = await this.password.verify(user.passwordHash, currentPassword);
+    if (!valid) {
+      throw new BadRequestException({
+        code: 'PASSWORD_INCORRECT',
+        message: 'Current password is incorrect',
+      });
+    }
+
+    const sameAsOld = await this.password.verify(user.passwordHash, newPassword);
+    if (sameAsOld) {
+      throw new BadRequestException({
+        code: 'PASSWORD_SAME_AS_OLD',
+        message: 'New password must be different from current password',
+      });
+    }
+
+    user.passwordHash = await this.password.hash(newPassword);
+    await user.save();
+
+    this.logger.log(`Password changed: ${user.email}`, UsersService.name);
+    return { message: 'Password changed successfully' };
   }
 }
