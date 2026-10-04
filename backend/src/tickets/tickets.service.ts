@@ -12,7 +12,7 @@ import {
   TicketStatus,
 } from './schemas/ticket-product.schema';
 import { LoggerService, PaginationService } from '../common';
-import { CreateTicketDto, QueryTicketDto } from './dto';
+import { CreateTicketDto, QueryTicketDto, UpdateTicketDto } from './dto';
 
 @Injectable()
 export class TicketsService {
@@ -130,5 +130,134 @@ export class TicketsService {
     }
 
     return ticket;
+  }
+
+  // ─────────────────────────────────────────
+  // 5.3 — UPDATE (admin)
+  // ─────────────────────────────────────────
+  async update(id: string, dto: UpdateTicketDto) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid ticket id' });
+    }
+
+    const update: Record<string, any> = { ...dto };
+    if (dto.eventDate) update.eventDate = new Date(dto.eventDate);
+
+    const ticket = await this.ticketModel
+      .findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true })
+      .lean()
+      .exec();
+
+    if (!ticket) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'Ticket not found' });
+    }
+
+    this.logger.log(`Ticket updated: ${ticket.name}`, TicketsService.name);
+    return ticket;
+  }
+
+  // ─────────────────────────────────────────
+  // 5.3 — PRICE (admin)
+  // ─────────────────────────────────────────
+  async updatePrice(id: string, price: number) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid ticket id' });
+    }
+
+    const ticket = await this.ticketModel
+      .findByIdAndUpdate(id, { $set: { price } }, { new: true, runValidators: true })
+      .lean()
+      .exec();
+
+    if (!ticket) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'Ticket not found' });
+    }
+
+    this.logger.log(`Price updated: ${ticket.name} → ${price}`, TicketsService.name);
+    return ticket;
+  }
+
+  // ─────────────────────────────────────────
+  // 5.3 — DELETE (admin)
+  // ─────────────────────────────────────────
+  async remove(id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid ticket id' });
+    }
+
+    const ticket = await this.ticketModel.findById(id).exec();
+    if (!ticket) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'Ticket not found' });
+    }
+
+    if (ticket.sold > 0) {
+      throw new BadRequestException({
+        code: 'TICKET_HAS_SALES',
+        message: 'Cannot delete ticket with sales. Cancel instead.',
+      });
+    }
+
+    await this.ticketModel.findByIdAndDelete(id).exec();
+    this.logger.log(`Ticket deleted: ${ticket.name}`, TicketsService.name);
+    return { message: 'Ticket deleted successfully' };
+  }
+
+  // ─────────────────────────────────────────
+  // 5.3 — PUBLISH / UNPUBLISH (admin)
+  // ─────────────────────────────────────────
+  async publish(id: string) {
+    return this.setStatus(id, TicketStatus.PUBLISHED);
+  }
+
+  async unpublish(id: string) {
+    return this.setStatus(id, TicketStatus.DRAFT);
+  }
+
+  async cancel(id: string) {
+    return this.setStatus(id, TicketStatus.CANCELLED);
+  }
+
+  private async setStatus(id: string, status: TicketStatus) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid ticket id' });
+    }
+
+    const ticket = await this.ticketModel
+      .findByIdAndUpdate(id, { $set: { status } }, { new: true })
+      .lean()
+      .exec();
+
+    if (!ticket) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'Ticket not found' });
+    }
+
+    this.logger.log(`Ticket status → ${status}: ${ticket.name}`, TicketsService.name);
+    return ticket;
+  }
+
+  // ─────────────────────────────────────────
+  // 5.3 — AVAILABILITY (public)
+  // ─────────────────────────────────────────
+  async checkAvailability(id: string, qty: number) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid ticket id' });
+    }
+
+    const ticket = await this.ticketModel.findById(id).lean().exec();
+    if (!ticket) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'Ticket not found' });
+    }
+
+    const available = ticket.quantity - ticket.sold;
+
+    return {
+      ticketId: ticket._id.toString(),
+      name: ticket.name,
+      quantity: ticket.quantity,
+      sold: ticket.sold,
+      available,
+      requested: qty,
+      canBook: ticket.status === TicketStatus.PUBLISHED && available >= qty,
+    };
   }
 }
