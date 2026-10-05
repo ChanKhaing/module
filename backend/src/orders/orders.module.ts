@@ -7,6 +7,7 @@ import {
 } from '../tickets/schemas/ticket-product.schema';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { OrdersCron } from './orders.cron';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { OrdersService } from './orders.service';
     ]),
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
+  providers: [OrdersService, OrdersCron],
   exports: [OrdersService, MongooseModule],
 })
 export class OrdersModule {}
