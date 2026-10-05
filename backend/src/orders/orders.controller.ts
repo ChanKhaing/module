@@ -1,9 +1,9 @@
 import {
-  Body, Controller, Get, Param, Post, Query,
+  Body, Controller, Get, Param, Patch, Post, Query,
 } from '@nestjs/common';
 
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, QueryOrderDto } from './dto';
+import { CreateOrderDto, QueryOrderDto, CancelOrderDto } from './dto';
 import { CurrentUser, RequirePermissions } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
 
@@ -21,6 +21,16 @@ export class OrdersController {
   @Get('me')
   findMine(@CurrentUser() user: JwtPayload, @Query() query: QueryOrderDto) {
     return this.orders.findMine(user.sub, query);
+  }
+
+  @RequirePermissions('order:cancel')
+  @Patch(':id/cancel')
+  cancel(
+    @Param('id') id: string,
+    @Body() dto: CancelOrderDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.orders.cancel(id, user.sub, dto);
   }
 
   @RequirePermissions('order:read')

@@ -16,7 +16,7 @@ import {
 } from '../tickets/schemas/ticket-product.schema';
 import { LoggerService, PaginationService } from '../common';
 import { RedisService, RedisKeys } from '../infra/redis';
-import { CreateOrderDto, QueryOrderDto } from './dto';
+import { CreateOrderDto, QueryOrderDto, CancelOrderDto } from './dto';
 
 const ORDER_TTL_SECONDS = 15 * 60;
 const MAX_ORDER_ITEMS = 10;
@@ -217,5 +217,46 @@ export class OrdersService {
       });
     }
     return order;
+  }
+
+  async cancel(id: string, userId: string, dto: CancelOrderDto) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid order id' });
+    }
+
+    const order = await this.orderModel.findById(id).exec();
+    if (!order) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
+
+    if (order.userId.toString() !== userId) {
+      throw new ForbiddenException({
+        code: 'ORDER_ACCESS_DENIED',
+        message: 'You can only cancel your own orders',
+      });
+    }
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException({
+        code: 'ORDER_CANNOT_CANCEL',
+        message: `Cannot cancel order with status "${order.status}"`,
+      });
+    }
+
+    for (const item of order.items) {
+      await this.ticketModel
+        .updateOne({ _id: item.ticketId }, { $inc: { sold: -item.qty } })
+        .exec();
+    }
+
+    order.status = OrderStatus.CANCELLED;
+    order.cancelledAt = new Date();
+    if (dto.reason) order.cancelReason = dto.reason;
+    await order.save();
+
+    await this.redis.del(RedisKeys.bookingTemp(id));
+
+    this.logger.log(`Order cancelled: ${order.orderCode}`, OrdersService.name);
+    return { message: 'Order cancelled successfully', orderCode: order.orderCode };
   }
 }
