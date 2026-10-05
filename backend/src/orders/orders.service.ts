@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,7 +16,7 @@ import {
 } from '../tickets/schemas/ticket-product.schema';
 import { LoggerService, PaginationService } from '../common';
 import { RedisService, RedisKeys } from '../infra/redis';
-import { CreateOrderDto } from './dto';
+import { CreateOrderDto, QueryOrderDto } from './dto';
 
 const ORDER_TTL_SECONDS = 15 * 60;
 const MAX_ORDER_ITEMS = 10;
@@ -160,5 +161,61 @@ export class OrdersService {
       if (!exists) return code;
     }
     throw new Error('Failed to generate unique order code');
+  }
+
+  async findMine(userId: string, query: QueryOrderDto) {
+    const { page, limit, skip, sort } = this.pagination.normalize(query);
+    const filter: Record<string, any> = { userId: new Types.ObjectId(userId) };
+    if (query.status) filter.status = query.status;
+
+    const [data, total] = await Promise.all([
+      this.orderModel.find(filter).sort(sort).skip(skip).limit(limit).lean().exec(),
+      this.orderModel.countDocuments(filter).exec(),
+    ]);
+    return { data, ...this.pagination.buildMeta(page, limit, total) };
+  }
+
+  async findAllAdmin(query: QueryOrderDto, roles: string[]) {
+    if (!roles.includes('admin')) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Admin access required',
+      });
+    }
+
+    const { page, limit, skip, sort } = this.pagination.normalize(query);
+    const filter: Record<string, any> = {};
+    if (query.status) filter.status = query.status;
+    if (query.userId) filter.userId = new Types.ObjectId(query.userId);
+
+    const [data, total] = await Promise.all([
+      this.orderModel.find(filter).sort(sort).skip(skip).limit(limit)
+        .populate('userId', 'email fullName').lean().exec(),
+      this.orderModel.countDocuments(filter).exec(),
+    ]);
+    return { data, ...this.pagination.buildMeta(page, limit, total) };
+  }
+
+  async findById(id: string, userId: string, roles: string[]) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid order id' });
+    }
+
+    const order = await this.orderModel.findById(id)
+      .populate('userId', 'email fullName').lean().exec();
+
+    if (!order) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
+
+    const isOwner = (order.userId as any)?._id?.toString() === userId;
+    const isAdmin = roles.includes('admin');
+    if (!isOwner && !isAdmin) {
+      throw new ForbiddenException({
+        code: 'ORDER_ACCESS_DENIED',
+        message: 'You do not have access to this order',
+      });
+    }
+    return order;
   }
 }
