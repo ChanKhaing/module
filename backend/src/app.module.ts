@@ -18,6 +18,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
 import { SecurityModule } from './common/security';
 import { RedisModule } from './infra/redis';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
 import { JwtAuthGuard, PermissionsGuard } from './common';
 import type { StringValue } from 'ms';
@@ -35,6 +36,7 @@ imports: [
     }),
 
     // Database Connection
+    ScheduleModule.forRoot(),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
