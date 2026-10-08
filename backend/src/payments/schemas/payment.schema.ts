@@ -21,7 +21,7 @@ export class Payment {
   @Prop({ required: true, unique: true, index: true })
   paymentCode!: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Order', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Order', required: true })
   orderId!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
@@ -39,7 +39,7 @@ export class Payment {
   @Prop({ enum: PaymentStatus, default: PaymentStatus.PENDING, index: true })
   status!: PaymentStatus;
 
-  @Prop({ index: true, sparse: true })
+  @Prop()
   idempotencyKey?: string;
 
   @Prop({ default: 1, min: 1 })
