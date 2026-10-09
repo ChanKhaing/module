@@ -10,7 +10,7 @@ import {
 } from './schemas/purchased-ticket.schema';
 import { OrderDocument } from '../orders/schemas/order.schema';
 import { LoggerService, PaginationService } from '../common';
-import { QueryPurchasedTicketDto } from './dto';
+import { QueryPurchasedTicketDto, RedeemTicketDto, ValidateQrDto } from './dto';
 
 @Injectable()
 export class PurchasedTicketsService {
@@ -138,5 +138,99 @@ export class PurchasedTicketsService {
     }
 
     return ticket;
+  }
+
+  // ─────────────────────────────────────────
+  // VALIDATE QR (agent) — check without using
+  // ─────────────────────────────────────────
+  async validateQr(dto: ValidateQrDto) {
+    const ticket = await this.ticketModel
+      .findOne({ qrPayload: dto.qrPayload })
+      .populate('orderId', 'orderCode')
+      .populate('ticketId', 'name eventDate')
+      .lean()
+      .exec();
+
+    if (!ticket) {
+      return {
+        valid: false,
+        reason: 'NOT_FOUND',
+        message: 'QR code not recognized',
+      };
+    }
+
+    if (ticket.status === PurchasedTicketStatus.USED) {
+      return {
+        valid: false,
+        reason: 'ALREADY_USED',
+        usedAt: ticket.usedAt,
+        code: ticket.code,
+      };
+    }
+
+    if (ticket.status === PurchasedTicketStatus.CANCELLED) {
+      return {
+        valid: false,
+        reason: 'CANCELLED',
+        code: ticket.code,
+      };
+    }
+
+    if (ticket.status === PurchasedTicketStatus.REFUNDED) {
+      return {
+        valid: false,
+        reason: 'REFUNDED',
+        code: ticket.code,
+      };
+    }
+
+    return {
+      valid: true,
+      code: ticket.code,
+      ticketName: ticket.ticketName,
+      status: ticket.status,
+      order: (ticket.orderId as any)?.orderCode,
+      event: (ticket.ticketId as any)?.name,
+      eventDate: (ticket.ticketId as any)?.eventDate,
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // REDEEM (agent) — mark as used
+  // ─────────────────────────────────────────
+  async redeem(dto: ValidateQrDto, _dto: RedeemTicketDto | null, agentId: string) {
+    const check = await this.validateQr(dto);
+    if (!check.valid) {
+      throw new BadRequestException({
+        code: `TICKET_${check.reason}`,
+        message: check.message ?? `Cannot redeem: ${check.reason}`,
+      });
+    }
+
+    const now = new Date();
+    // Atomic guard: only if still 'issued'
+    const updated = await this.ticketModel.findOneAndUpdate(
+      { qrPayload: dto.qrPayload, status: PurchasedTicketStatus.ISSUED },
+      { $set: { status: PurchasedTicketStatus.USED, usedAt: now } },
+      { new: true },
+    ).exec();
+
+    if (!updated) {
+      throw new BadRequestException({
+        code: 'TICKET_REDEEM_RACE',
+        message: 'Ticket was redeemed concurrently',
+      });
+    }
+
+    this.logger.log(
+      `Ticket redeemed: ${updated.code} by agent=${agentId}`,
+      PurchasedTicketsService.name,
+    );
+
+    return {
+      message: 'Ticket redeemed successfully',
+      code: updated.code,
+      usedAt: updated.usedAt,
+    };
   }
 }
