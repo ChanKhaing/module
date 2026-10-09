@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { nanoid } from 'nanoid';
 
 import {
@@ -9,7 +9,8 @@ import {
   PurchasedTicketStatus,
 } from './schemas/purchased-ticket.schema';
 import { OrderDocument } from '../orders/schemas/order.schema';
-import { LoggerService } from '../common';
+import { LoggerService, PaginationService } from '../common';
+import { QueryPurchasedTicketDto } from './dto';
 
 @Injectable()
 export class PurchasedTicketsService {
@@ -17,6 +18,7 @@ export class PurchasedTicketsService {
     @InjectModel(PurchasedTicket.name)
     private readonly ticketModel: Model<PurchasedTicketDocument>,
     private readonly logger: LoggerService,
+    private readonly pagination: PaginationService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -72,5 +74,69 @@ export class PurchasedTicketsService {
     const d = new Date();
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
     return `TKT-${ymd}-${nanoid(10).toUpperCase()}`;
+  }
+
+  // ─────────────────────────────────────────
+  // MY TICKETS (list)
+  // ─────────────────────────────────────────
+  async findMine(userId: string, query: QueryPurchasedTicketDto) {
+    const { page, limit, skip, sort } = this.pagination.normalize(query);
+
+    const filter: Record<string, any> = {
+      userId: new Types.ObjectId(userId),
+    };
+    if (query.status) filter.status = query.status;
+    if (query.orderId) filter.orderId = new Types.ObjectId(query.orderId);
+    if (query.ticketId) filter.ticketId = new Types.ObjectId(query.ticketId);
+
+    const [data, total] = await Promise.all([
+      this.ticketModel
+        .find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      this.ticketModel.countDocuments(filter).exec(),
+    ]);
+
+    return { data, ...this.pagination.buildMeta(page, limit, total) };
+  }
+
+  // ─────────────────────────────────────────
+  // DETAIL (self or admin)
+  // ─────────────────────────────────────────
+  async findById(id: string, userId: string, roles: string[]) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel
+      .findById(id)
+      .populate('orderId', 'orderCode totalAmount status')
+      .populate('ticketId', 'name eventDate category')
+      .lean()
+      .exec();
+
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'PURCHASED_TICKET_NOT_FOUND',
+        message: 'Purchased ticket not found',
+      });
+    }
+
+    const isOwner = (ticket.userId as any)?.toString() === userId;
+    const isAdmin = roles.includes('admin');
+    if (!isOwner && !isAdmin) {
+      throw new ForbiddenException({
+        code: 'TICKET_ACCESS_DENIED',
+        message: 'You do not have access to this ticket',
+      });
+    }
+
+    return ticket;
   }
 }
