@@ -16,6 +16,16 @@ import type { JwtPayload } from '../auth/interfaces';
 export class PurchasedTicketsController {
   constructor(private readonly tickets: PurchasedTicketsService) {}
 
+  // ─── Admin list ───
+  @RequirePermissions('ticket:manage')
+  @Get()
+  findAllAdmin(
+    @Query() query: QueryPurchasedTicketDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tickets.findAllAdmin(query, [user.role]);
+  }
+
   // ─── Feature 8.1 — My tickets ───
   @RequirePermissions('ticket:view-my')
   @Get('me')
@@ -26,7 +36,7 @@ export class PurchasedTicketsController {
     return this.tickets.findMine(user.sub, query);
   }
 
-  // ─── Feature 8.2 — Validate + Redeem (agent) ───
+  // ─── Feature 8.2 — Validate + Redeem ───
   @RequirePermissions('ticket:redeem')
   @Post('validate')
   validateQr(@Body() dto: ValidateQrDto) {
@@ -43,7 +53,7 @@ export class PurchasedTicketsController {
     return this.tickets.redeem(dto, redeemDto, user.sub);
   }
 
-  // ─── Feature 8.3 — Cancel (self) ───
+  // ─── Feature 8.3 — Cancel ───
   @RequirePermissions('ticket:view-my')
   @Patch(':id/cancel')
   cancel(

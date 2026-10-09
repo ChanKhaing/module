@@ -288,4 +288,39 @@ export class PurchasedTicketsService {
       code: ticket.code,
     };
   }
+
+  // ─────────────────────────────────────────
+  // ADMIN LIST
+  // ─────────────────────────────────────────
+  async findAllAdmin(query: QueryPurchasedTicketDto, roles: string[]) {
+    if (!roles.includes('admin')) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Admin access required',
+      });
+    }
+
+    const { page, limit, skip, sort } = this.pagination.normalize(query);
+
+    const filter: Record<string, any> = {};
+    if (query.status) filter.status = query.status;
+    if (query.orderId) filter.orderId = new Types.ObjectId(query.orderId);
+    if (query.ticketId) filter.ticketId = new Types.ObjectId(query.ticketId);
+
+    const [data, total] = await Promise.all([
+      this.ticketModel
+        .find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .populate('userId', 'email fullName')
+        .populate('orderId', 'orderCode')
+        .populate('ticketId', 'name eventDate')
+        .lean()
+        .exec(),
+      this.ticketModel.countDocuments(filter).exec(),
+    ]);
+
+    return { data, ...this.pagination.buildMeta(page, limit, total) };
+  }
 }
