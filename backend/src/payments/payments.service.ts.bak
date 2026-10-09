@@ -82,39 +82,7 @@ export class PaymentsService {
       });
     }
 
-    // ─── Idempotency: same key → same payment ───
-    if (dto.idempotencyKey) {
-      const byKey = await this.paymentModel.findOne({
-        idempotencyKey: dto.idempotencyKey,
-      }).exec();
-      if (byKey) {
-        if (byKey.userId.toString() !== userId) {
-          throw new ConflictException({
-            code: 'IDEMPOTENCY_KEY_CONFLICT',
-            message: 'Idempotency key belongs to another user',
-          });
-        }
-        this.logger.log(
-          `Idempotent hit: ${byKey.paymentCode} (key=${dto.idempotencyKey})`,
-          PaymentsService.name,
-        );
-        return byKey.toObject();
-      }
-    }
-
-    // ─── If order already has a successful payment → conflict ───
-    const success = await this.paymentModel.findOne({
-      orderId: order._id,
-      status: PaymentStatus.SUCCESS,
-    }).exec();
-    if (success) {
-      throw new ConflictException({
-        code: 'ORDER_ALREADY_PAID',
-        message: 'This order already has a successful payment',
-      });
-    }
-
-    // ─── Existing pending payment for same order → return it ───
+    // Existing pending payment for same order → return it
     const existing = await this.paymentModel.findOne({
       orderId: order._id,
       userId: new Types.ObjectId(userId),
@@ -129,51 +97,19 @@ export class PaymentsService {
       return existing.toObject();
     }
 
-    const previousCount = await this.paymentModel.countDocuments({
-      orderId: order._id,
-      userId: new Types.ObjectId(userId),
-    });
-    const attempt = previousCount + 1;
-
     const paymentCode = await this.generatePaymentCode();
 
-    let payment: PaymentDocument;
-    try {
-      payment = await this.paymentModel.create({
-        paymentCode,
-        orderId: order._id,
-        userId: new Types.ObjectId(userId),
-        amount: order.totalAmount,
-        currency: order.currency,
-        status: PaymentStatus.PENDING,
-        idempotencyKey: dto.idempotencyKey,
-        attempt: attempt,
-        retryCount: 0,
-      });
-    } catch (err: any) {
-      // E11000 = duplicate key (idempotencyKey race OR success partial unique)
-      if (err?.code === 11000) {
-        // Re-check idempotency key first
-        if (dto.idempotencyKey) {
-          const byKey = await this.paymentModel.findOne({
-            idempotencyKey: dto.idempotencyKey,
-          }).exec();
-          if (byKey) {
-            this.logger.warn(
-              `Idempotency race resolved: ${byKey.paymentCode}`,
-              PaymentsService.name,
-            );
-            return byKey.toObject();
-          }
-        }
-        // Success partial unique → order already has successful payment
-        throw new ConflictException({
-          code: 'PAYMENT_DUPLICATE',
-          message: 'Payment already exists for this order',
-        });
-      }
-      throw err;
-    }
+    const payment = await this.paymentModel.create({
+      paymentCode,
+      orderId: order._id,
+      userId: new Types.ObjectId(userId),
+      amount: order.totalAmount,
+      currency: order.currency,
+      status: PaymentStatus.PENDING,
+      idempotencyKey: dto.idempotencyKey,
+      attempt: 1,
+      retryCount: 0,
+    });
 
     this.logger.log(
       `Payment initiated: ${paymentCode} (order=${order.orderCode}, amount=${order.totalAmount} ${order.currency})`,
