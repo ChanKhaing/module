@@ -46,10 +46,11 @@ export class PurchasedTicketsController {
   @RequirePermissions('ticket:redeem')
   @Post('redeem')
   redeem(
-    @Body() dto: RedeemTicketDto,
+    @Body() dto: ValidateQrDto,
+    @Body() redeemDto: RedeemTicketDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.tickets.redeem(dto, user.sub);
+    return this.tickets.redeem(dto, redeemDto, user.sub);
   }
 
   // ─── Feature 8.3 — Cancel ───

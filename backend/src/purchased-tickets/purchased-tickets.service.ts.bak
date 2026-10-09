@@ -198,8 +198,8 @@ export class PurchasedTicketsService {
   // ─────────────────────────────────────────
   // REDEEM (agent) — mark as used
   // ─────────────────────────────────────────
-  async redeem(dto: RedeemTicketDto, agentId: string) {
-    const check = await this.validateQr({ qrPayload: dto.qrPayload });
+  async redeem(dto: ValidateQrDto, _dto: RedeemTicketDto | null, agentId: string) {
+    const check = await this.validateQr(dto);
     if (!check.valid) {
       throw new BadRequestException({
         code: `TICKET_${check.reason}`,
