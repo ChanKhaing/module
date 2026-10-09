@@ -22,6 +22,7 @@ import {
 import { LoggerService, PaginationService } from '../common';
 import { RedisService, RedisKeys } from '../infra/redis';
 import { InitiatePaymentDto, ConfirmPaymentDto, ConfirmOutcome, QueryPaymentDto } from './dto';
+import { PurchasedTicketsService } from '../purchased-tickets/purchased-tickets.service';
 
 @Injectable()
 export class PaymentsService {
@@ -33,6 +34,7 @@ export class PaymentsService {
     private readonly redis: RedisService,
     private readonly logger: LoggerService,
     private readonly pagination: PaginationService,
+    private readonly purchasedTickets: PurchasedTicketsService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -296,6 +298,22 @@ export class PaymentsService {
     order.status = OrderStatus.PAID;
     order.paidAt = now;
     await order.save();
+
+    // ─── Auto-issue purchased tickets (Feature 7.4) ───
+    try {
+      const result = await this.purchasedTickets.issueFromOrder(order);
+      this.logger.log(
+        `Tickets issued for ${order.orderCode}: ${result.issued}`,
+        PaymentsService.name,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Ticket issue failed for ${order.orderCode}: ${(err as Error).message}`,
+        (err as Error).stack,
+        PaymentsService.name,
+      );
+      // Don't fail the payment — admin can re-issue manually
+    }
 
     await this.redis.del(RedisKeys.bookingTemp(order._id.toString()));
 

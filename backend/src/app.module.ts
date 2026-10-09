@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
+import { PurchasedTicketsModule } from './purchased-tickets/purchased-tickets.module';
 import { SupportModule } from './support/support.module';
 import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
 import { HealthModule } from './health/health.module';
@@ -74,6 +75,7 @@ imports: [
     TicketsModule,
     OrdersModule,
     PaymentsModule,
+    PurchasedTicketsModule,
     SupportModule,
     SeedModule,
   ],
