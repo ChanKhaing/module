@@ -8,6 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 import { TicketsService } from './tickets.service';
 import {
@@ -19,6 +20,7 @@ import {
 import { CurrentUser, Public, RequirePermissions } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
 
+@ApiTags('tickets')
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly tickets: TicketsService) {}
