@@ -21,7 +21,8 @@ import {
 } from '../orders/schemas/order.schema';
 import { LoggerService, PaginationService } from '../common';
 import { RedisService, RedisKeys } from '../infra/redis';
-import { InitiatePaymentDto, ConfirmPaymentDto, ConfirmOutcome, QueryPaymentDto } from './dto';
+import { InitiatePaymentDto, ConfirmPaymentDto, ConfirmOutcome, QueryPaymentDto, MockWebhookDto } from './dto';
+import { PurchasedTicketsService } from '../purchased-tickets/purchased-tickets.service';
 
 @Injectable()
 export class PaymentsService {
@@ -33,6 +34,7 @@ export class PaymentsService {
     private readonly redis: RedisService,
     private readonly logger: LoggerService,
     private readonly pagination: PaginationService,
+    private readonly purchasedTickets: PurchasedTicketsService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -297,6 +299,22 @@ export class PaymentsService {
     order.paidAt = now;
     await order.save();
 
+    // ─── Auto-issue purchased tickets (Feature 7.4) ───
+    try {
+      const result = await this.purchasedTickets.issueFromOrder(order);
+      this.logger.log(
+        `Tickets issued for ${order.orderCode}: ${result.issued}`,
+        PaymentsService.name,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Ticket issue failed for ${order.orderCode}: ${(err as Error).message}`,
+        (err as Error).stack,
+        PaymentsService.name,
+      );
+      // Don't fail the payment — admin can re-issue manually
+    }
+
     await this.redis.del(RedisKeys.bookingTemp(order._id.toString()));
 
     this.logger.log(
@@ -354,5 +372,144 @@ export class PaymentsService {
       });
     }
     return payment;
+  }
+
+  // ─────────────────────────────────────────
+  // ADMIN LIST — all payments with filters
+  // ─────────────────────────────────────────
+  async findAllAdmin(query: QueryPaymentDto, roles: string[]) {
+    if (!roles.includes('admin')) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Admin access required',
+      });
+    }
+
+    const { page, limit, skip, sort } = this.pagination.normalize(query);
+    const filter: Record<string, any> = {};
+    if (query.status) filter.status = query.status;
+    if (query.orderId) filter.orderId = new Types.ObjectId(query.orderId);
+
+    const [data, total] = await Promise.all([
+      this.paymentModel
+        .find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .populate('userId', 'email fullName')
+        .populate('orderId', 'orderCode totalAmount status')
+        .lean()
+        .exec(),
+      this.paymentModel.countDocuments(filter).exec(),
+    ]);
+
+    return { data, ...this.pagination.buildMeta(page, limit, total) };
+  }
+
+  // ─────────────────────────────────────────
+  // MOCK WEBHOOK — simulate external callback
+  // (B-127 webhook concept)
+  // ─────────────────────────────────────────
+  async mockWebhook(dto: MockWebhookDto, roles: string[]) {
+    if (!roles.includes('admin')) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Admin access required',
+      });
+    }
+
+    if (!Types.ObjectId.isValid(dto.paymentId)) {
+      throw new BadRequestException({ code: 'INVALID_ID', message: 'Invalid payment id' });
+    }
+
+    const payment = await this.paymentModel.findById(dto.paymentId).exec();
+    if (!payment) {
+      throw new NotFoundException({ code: 'PAYMENT_NOT_FOUND', message: 'Payment not found' });
+    }
+
+    const order = await this.orderModel.findById(payment.orderId).exec();
+    if (!order) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
+
+    const now = new Date();
+
+    // Store webhook metadata
+    payment.metadata = {
+      ...(payment.metadata ?? {}),
+      webhookSource: 'mock',
+      webhookAt: now.toISOString(),
+      webhookOutcome: dto.outcome,
+      ...(dto.metadata ?? {}),
+    };
+
+    if (dto.outcome === ConfirmOutcome.FAIL) {
+      payment.status = PaymentStatus.FAILED;
+      payment.failedAt = now;
+      payment.failureReason = dto.failureReason ?? 'Webhook failure';
+      payment.retryCount += 1;
+      await payment.save();
+
+      this.logger.warn(
+        `Mock webhook → FAILED: ${payment.paymentCode}`,
+        PaymentsService.name,
+      );
+
+      return {
+        message: 'Webhook processed (failed)',
+        paymentCode: payment.paymentCode,
+        status: payment.status,
+      };
+    }
+
+    // Success — atomic guard
+    const updated = await this.paymentModel.findOneAndUpdate(
+      { _id: payment._id, status: { $ne: PaymentStatus.SUCCESS } },
+      {
+        $set: {
+          status: PaymentStatus.SUCCESS,
+          paidAt: now,
+          metadata: payment.metadata,
+        },
+      },
+      { new: true },
+    ).exec();
+
+    if (!updated) {
+      throw new ConflictException({
+        code: 'PAYMENT_ALREADY_SUCCESS',
+        message: 'Payment was already successful',
+      });
+    }
+
+    if (order.status === OrderStatus.PENDING) {
+      order.status = OrderStatus.PAID;
+      order.paidAt = now;
+      await order.save();
+
+      try {
+        await this.purchasedTickets.issueFromOrder(order);
+      } catch (err) {
+        this.logger.error(
+          `Ticket issue via webhook failed: ${(err as Error).message}`,
+          (err as Error).stack,
+          PaymentsService.name,
+        );
+      }
+
+      await this.redis.del(RedisKeys.bookingTemp(order._id.toString()));
+    }
+
+    this.logger.log(
+      `Mock webhook → SUCCESS: ${payment.paymentCode} (order=${order.orderCode})`,
+      PaymentsService.name,
+    );
+
+    return {
+      message: 'Webhook processed (success)',
+      paymentCode: payment.paymentCode,
+      orderCode: order.orderCode,
+      status: PaymentStatus.SUCCESS,
+    };
   }
 }
