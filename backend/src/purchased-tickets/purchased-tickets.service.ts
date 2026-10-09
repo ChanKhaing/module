@@ -10,7 +10,7 @@ import {
 } from './schemas/purchased-ticket.schema';
 import { OrderDocument } from '../orders/schemas/order.schema';
 import { LoggerService, PaginationService } from '../common';
-import { QueryPurchasedTicketDto, RedeemTicketDto, ValidateQrDto } from './dto';
+import { QueryPurchasedTicketDto, RedeemTicketDto, ValidateQrDto, CancelPurchasedTicketDto } from './dto';
 
 @Injectable()
 export class PurchasedTicketsService {
@@ -231,6 +231,61 @@ export class PurchasedTicketsService {
       message: 'Ticket redeemed successfully',
       code: updated.code,
       usedAt: updated.usedAt,
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // CANCEL (user self) — only if not used
+  // ─────────────────────────────────────────
+  async cancel(id: string, userId: string, dto: CancelPurchasedTicketDto) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(id).exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'PURCHASED_TICKET_NOT_FOUND',
+        message: 'Purchased ticket not found',
+      });
+    }
+
+    if (ticket.userId.toString() !== userId) {
+      throw new ForbiddenException({
+        code: 'TICKET_ACCESS_DENIED',
+        message: 'You can only cancel your own tickets',
+      });
+    }
+
+    if (ticket.status === PurchasedTicketStatus.USED) {
+      throw new BadRequestException({
+        code: 'TICKET_ALREADY_USED',
+        message: 'Cannot cancel a used ticket',
+      });
+    }
+
+    if (ticket.status !== PurchasedTicketStatus.ISSUED) {
+      throw new BadRequestException({
+        code: 'TICKET_CANNOT_CANCEL',
+        message: `Cannot cancel ticket with status "${ticket.status}"`,
+      });
+    }
+
+    ticket.status = PurchasedTicketStatus.CANCELLED;
+    ticket.cancelledAt = new Date();
+    await ticket.save();
+
+    this.logger.log(
+      `Ticket cancelled: ${ticket.code} by user=${userId} (reason=${dto.reason ?? 'none'})`,
+      PurchasedTicketsService.name,
+    );
+
+    return {
+      message: 'Ticket cancelled successfully',
+      code: ticket.code,
     };
   }
 }

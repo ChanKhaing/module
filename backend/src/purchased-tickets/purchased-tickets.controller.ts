@@ -3,7 +3,12 @@ import {
 } from '@nestjs/common';
 
 import { PurchasedTicketsService } from './purchased-tickets.service';
-import { QueryPurchasedTicketDto, ValidateQrDto, RedeemTicketDto } from './dto';
+import {
+  QueryPurchasedTicketDto,
+  ValidateQrDto,
+  RedeemTicketDto,
+  CancelPurchasedTicketDto,
+} from './dto';
 import { CurrentUser, RequirePermissions } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
 
@@ -21,14 +26,13 @@ export class PurchasedTicketsController {
     return this.tickets.findMine(user.sub, query);
   }
 
-  // ─── Feature 8.2 — Validate QR (agent/admin) ───
+  // ─── Feature 8.2 — Validate + Redeem (agent) ───
   @RequirePermissions('ticket:redeem')
   @Post('validate')
   validateQr(@Body() dto: ValidateQrDto) {
     return this.tickets.validateQr(dto);
   }
 
-  // ─── Feature 8.2 — Redeem (agent/admin) ───
   @RequirePermissions('ticket:redeem')
   @Post('redeem')
   redeem(
@@ -37,6 +41,17 @@ export class PurchasedTicketsController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.tickets.redeem(dto, redeemDto, user.sub);
+  }
+
+  // ─── Feature 8.3 — Cancel (self) ───
+  @RequirePermissions('ticket:view-my')
+  @Patch(':id/cancel')
+  cancel(
+    @Param('id') id: string,
+    @Body() dto: CancelPurchasedTicketDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tickets.cancel(id, user.sub, dto);
   }
 
   // ─── Detail ───
