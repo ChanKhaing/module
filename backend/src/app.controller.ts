@@ -1,20 +1,20 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { ApiTags } from '@nestjs/swagger';
+import { Public } from './common';
 
+@ApiTags('root')
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
-
+  @Public()
   @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  welcome() {
+    return {
+      name: 'Ticket Platform API',
+      version: '1.0.0',
+      status: 'running',
+      docs: '/docs',
+      health: '/health',
+      timestamp: new Date().toISOString(),
+    };
   }
-
-  // app.controller.ts
-
-// @Get('raw')
-// @SkipWrap()
-// getRaw() {
-//   return { hello: 'world' };
-// }
 }

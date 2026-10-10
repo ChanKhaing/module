@@ -70,7 +70,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document, {
+  SwaggerModule.setup('api', app, document, {
     swaggerOptions: {
       persistAuthorization: true,
       tagsSorter: 'alpha',
@@ -78,7 +78,7 @@ async function bootstrap() {
     },
   });
 
-  console.log(`📚 Swagger docs: http://localhost:${port}/docs`);
+  console.log(`📚 Swagger docs: http://localhost:${port}/api`);
 
   await app.listen(port);
   logger.log(`🚀 Server running on http://localhost:${port}`, 'Bootstrap');
