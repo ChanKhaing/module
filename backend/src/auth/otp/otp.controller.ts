@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { OtpService } from './otp.service';
 import { RequestOtpDto, VerifyOtpDto } from './dto';
 import { Public } from '../../common';
@@ -8,6 +9,7 @@ import { Public } from '../../common';
  * Marked @Public() so JWT guard is skipped.
  */
 @Public()
+@ApiTags('auth')
 @Controller('auth/otp')
 export class OtpController {
   constructor(private readonly otp: OtpService) {}

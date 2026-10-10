@@ -1,6 +1,7 @@
 import {
   Body, Controller, Get, Param, Patch, Post, Query,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 import { PaymentsService } from './payments.service';
 import {
@@ -12,6 +13,8 @@ import {
 import { CurrentUser, RequirePermissions } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
 
+@ApiTags('payments')
+@ApiBearerAuth('access-token')
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}

@@ -21,7 +21,7 @@ export class PurchasedTicket {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   userId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Order', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Order', required: true })
   orderId!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'TicketProduct', required: true })

@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 import { PermissionsService } from './permissions.service';
 import { CreatePermissionDto } from './dto';
 import { PaginationQueryDto, RequirePermissions } from '../common';
 
+@ApiTags('permissions')
+@ApiBearerAuth('access-token')
 @Controller('permissions')
 export class PermissionsController {
   constructor(private readonly permissions: PermissionsService) {}

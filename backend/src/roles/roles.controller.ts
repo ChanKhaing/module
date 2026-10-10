@@ -8,11 +8,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 import { RolesService } from './roles.service';
 import { CreateRoleDto, UpdateRoleDto, AssignPermissionsDto } from './dto';
 import { PaginationQueryDto, RequirePermissions } from '../common';
 
+@ApiTags('roles')
+@ApiBearerAuth('access-token')
 @Controller('roles')
 export class RolesController {
   constructor(private readonly roles: RolesService) {}

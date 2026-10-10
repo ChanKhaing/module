@@ -1,12 +1,15 @@
 import {
   Body, Controller, Get, Param, Patch, Post, Query,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 import { OrdersService } from './orders.service';
 import { CreateOrderDto, QueryOrderDto, CancelOrderDto } from './dto';
 import { CurrentUser, RequirePermissions } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
 
+@ApiTags('orders')
+@ApiBearerAuth('access-token')
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
