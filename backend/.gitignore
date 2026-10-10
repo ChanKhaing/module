@@ -46,6 +46,8 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+smoketest.sh
+
 # temp directory
 .temp
 .tmp

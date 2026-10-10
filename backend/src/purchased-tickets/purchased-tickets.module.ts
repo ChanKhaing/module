@@ -5,6 +5,7 @@ import {
   PurchasedTicket,
   PurchasedTicketSchema,
 } from './schemas/purchased-ticket.schema';
+import { PurchasedTicketsController } from './purchased-tickets.controller';
 import { PurchasedTicketsService } from './purchased-tickets.service';
 
 @Module({
@@ -13,6 +14,7 @@ import { PurchasedTicketsService } from './purchased-tickets.service';
       { name: PurchasedTicket.name, schema: PurchasedTicketSchema },
     ]),
   ],
+  controllers: [PurchasedTicketsController],
   providers: [PurchasedTicketsService],
   exports: [PurchasedTicketsService, MongooseModule],
 })
