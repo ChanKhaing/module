@@ -15,6 +15,11 @@ import {
   SupportPriority,
 } from './schemas/support-ticket.schema';
 import {
+  SupportMessage,
+  SupportMessageDocument,
+  SenderRole,
+} from './schemas/support-message.schema';
+import {
   Order,
   OrderDocument,
 } from '../orders/schemas/order.schema';
@@ -36,6 +41,8 @@ export class SupportService {
   constructor(
     @InjectModel(SupportTicket.name)
     private readonly ticketModel: Model<SupportTicketDocument>,
+    @InjectModel(SupportMessage.name)
+    private readonly messageModel: Model<SupportMessageDocument>,
     @InjectModel(Order.name)
     private readonly orderModel: Model<OrderDocument>,
     @InjectModel(PurchasedTicket.name)
@@ -264,6 +271,335 @@ export class SupportService {
   // ─────────────────────────────────────────
   // HELPERS
   // ─────────────────────────────────────────
+
+  // ─────────────────────────────────────────
+  // ASSIGN AGENT (admin/agent)
+  // ─────────────────────────────────────────
+  async assignAgent(id: string, agentId: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+    if (!Types.ObjectId.isValid(agentId)) {
+      throw new BadRequestException({
+        code: 'INVALID_AGENT_ID',
+        message: 'Invalid agent id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(id).exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    ticket.agentId = new Types.ObjectId(agentId);
+    if (ticket.status === SupportStatus.OPEN) {
+      ticket.status = SupportStatus.IN_PROGRESS;
+    }
+    await ticket.save();
+
+    this.logger.log(
+      `Ticket assigned: ${ticket.ticketCode} → agent ${agentId}`,
+      SupportService.name,
+    );
+
+    return ticket.toObject();
+  }
+
+  // ─────────────────────────────────────────
+  // UPDATE STATUS (agent/admin)
+  // ─────────────────────────────────────────
+  async updateStatus(
+    id: string,
+    status: SupportStatus,
+    note?: string,
+  ) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(id).exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    if (ticket.status === SupportStatus.CLOSED) {
+      throw new BadRequestException({
+        code: 'TICKET_CLOSED',
+        message: 'Cannot update a closed ticket',
+      });
+    }
+
+    ticket.status = status;
+
+    if (status === SupportStatus.RESOLVED) {
+      ticket.resolvedAt = new Date();
+      if (note) ticket.resolutionNote = note;
+    }
+    if (status === SupportStatus.CLOSED) {
+      ticket.closedAt = new Date();
+      if (note) ticket.resolutionNote = note;
+    }
+
+    await ticket.save();
+
+    this.logger.log(
+      `Ticket status: ${ticket.ticketCode} → ${status}`,
+      SupportService.name,
+    );
+
+    return ticket.toObject();
+  }
+
+  // ─────────────────────────────────────────
+  // UPDATE PRIORITY (agent/admin)
+  // ─────────────────────────────────────────
+  async updatePriority(id: string, priority: SupportPriority) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { priority } },
+        { new: true, runValidators: true },
+      )
+      .lean()
+      .exec();
+
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    this.logger.log(
+      `Ticket priority: ${ticket.ticketCode} → ${priority}`,
+      SupportService.name,
+    );
+
+    return ticket;
+  }
+
+  // ─────────────────────────────────────────
+  // RESOLVE (agent/admin)
+  // ─────────────────────────────────────────
+  async resolve(id: string, note?: string) {
+    return this.updateStatus(id, SupportStatus.RESOLVED, note);
+  }
+
+  // ─────────────────────────────────────────
+  // CLOSE (agent/admin)
+  // ─────────────────────────────────────────
+  async close(id: string, note?: string) {
+    return this.updateStatus(id, SupportStatus.CLOSED, note);
+  }
+
+  // ─────────────────────────────────────────
+  // REOPEN (agent/admin)
+  // ─────────────────────────────────────────
+  async reopen(id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(id).exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    if (
+      ticket.status !== SupportStatus.RESOLVED &&
+      ticket.status !== SupportStatus.CLOSED
+    ) {
+      throw new BadRequestException({
+        code: 'TICKET_NOT_RESOLVED',
+        message: 'Only resolved or closed tickets can be reopened',
+      });
+    }
+
+    ticket.status = SupportStatus.OPEN;
+    ticket.resolvedAt = undefined;
+    ticket.closedAt = undefined;
+    ticket.resolutionNote = undefined;
+    await ticket.save();
+
+    this.logger.log(
+      `Ticket reopened: ${ticket.ticketCode}`,
+      SupportService.name,
+    );
+
+    return ticket.toObject();
+  }
+
+
+  // ─────────────────────────────────────────
+  // REPLY (customer or agent/admin)
+  // ─────────────────────────────────────────
+  async addMessage(
+    ticketId: string,
+    userId: string,
+    userRole: string,
+    body: string,
+    attachments: string[] = [],
+    isInternal = false,
+  ) {
+    if (!Types.ObjectId.isValid(ticketId)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(ticketId).exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    // Customer only on own ticket
+    const isStaff = userRole === 'admin' || userRole === 'agent';
+    if (!isStaff && ticket.customerId.toString() !== userId) {
+      throw new ForbiddenException({
+        code: 'TICKET_ACCESS_DENIED',
+        message: 'You do not have access to this ticket',
+      });
+    }
+
+    if (ticket.status === SupportStatus.CLOSED) {
+      throw new BadRequestException({
+        code: 'TICKET_CLOSED',
+        message: 'Cannot reply to a closed ticket',
+      });
+    }
+
+    // Internal notes only by staff
+    if (isInternal && !isStaff) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Internal notes are staff-only',
+      });
+    }
+
+    // Determine senderRole
+    let senderRole: SenderRole;
+    if (userRole === 'admin') senderRole = SenderRole.ADMIN;
+    else if (userRole === 'agent') senderRole = SenderRole.AGENT;
+    else senderRole = SenderRole.CUSTOMER;
+
+    const message = await this.messageModel.create({
+      supportTicketId: new Types.ObjectId(ticketId),
+      senderId: new Types.ObjectId(userId),
+      senderRole,
+      body,
+      attachments,
+      isInternal,
+    });
+
+    // Bump ticket counters
+    ticket.messageCount += 1;
+    ticket.lastMessageAt = new Date();
+    // Auto: OPEN → IN_PROGRESS when staff replies
+    if (isStaff && ticket.status === SupportStatus.OPEN) {
+      ticket.status = SupportStatus.IN_PROGRESS;
+    }
+    await ticket.save();
+
+    this.logger.log(
+      `Message on ${ticket.ticketCode} by ${senderRole}`,
+      SupportService.name,
+    );
+
+    return message.toObject();
+  }
+
+  // ─────────────────────────────────────────
+  // LIST MESSAGES (thread)
+  // ─────────────────────────────────────────
+  async listMessages(
+    ticketId: string,
+    userId: string,
+    userRole: string,
+    query: { page?: number; limit?: number },
+  ) {
+    if (!Types.ObjectId.isValid(ticketId)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(ticketId).lean().exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    const isStaff = userRole === 'admin' || userRole === 'agent';
+    if (!isStaff && ticket.customerId.toString() !== userId) {
+      throw new ForbiddenException({
+        code: 'TICKET_ACCESS_DENIED',
+        message: 'You do not have access to this ticket',
+      });
+    }
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 50));
+    const skip = (page - 1) * limit;
+
+    // Customers never see internal messages
+    const filter: Record<string, any> = {
+      supportTicketId: new Types.ObjectId(ticketId),
+    };
+    if (!isStaff) filter.isInternal = false;
+
+    const [data, total] = await Promise.all([
+      this.messageModel
+        .find(filter)
+        .populate('senderId', 'email fullName')
+        .sort({ createdAt: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      this.messageModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   private async generateTicketCode(): Promise<string> {
     const d = new Date();
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;

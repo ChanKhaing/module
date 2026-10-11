@@ -62,8 +62,17 @@ export class JwtAuthGuard implements CanActivate {
 
     // 5. req.user ထည့်
         request.user = {
-      ...payload,                    // sub, email, role, permissions, jti, type
-      roles: [payload.role],         // PermissionsGuard အတွက် (array)
+      // JwtPayload shape (for @CurrentUser() typed as JwtPayload)
+      sub: payload.sub,
+      role: payload.role,
+      jti: payload.jti,
+      type: payload.type,
+      // Shared
+      email: payload.email,
+      permissions: payload.permissions ?? [],
+      // Express-style (backward compat)
+      id: payload.sub,
+      roles: [payload.role],
     };
 
     return true;

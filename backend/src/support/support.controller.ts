@@ -12,6 +12,10 @@ import { SupportService } from './support.service';
 import {
   CreateSupportTicketDto,
   QuerySupportDto,
+  AssignAgentDto,
+  UpdateSupportStatusDto,
+  UpdateSupportPriorityDto,
+  ReplySupportDto,
 } from './dto';
 import {
   CurrentUser,
@@ -69,5 +73,91 @@ export class SupportController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.support.update(id, user.sub, patch);
+  }
+
+  // ─── Agent / Admin — assign ───
+  @RequirePermissions('support:resolve')
+  @Patch(':id/assign')
+  assignAgent(
+    @Param('id') id: string,
+    @Body() dto: AssignAgentDto,
+  ) {
+    return this.support.assignAgent(id, dto.agentId);
+  }
+
+  // ─── Agent / Admin — status ───
+  @RequirePermissions('support:resolve')
+  @Patch(':id/status')
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupportStatusDto,
+  ) {
+    return this.support.updateStatus(id, dto.status, dto.resolutionNote);
+  }
+
+  // ─── Agent / Admin — priority ───
+  @RequirePermissions('support:resolve')
+  @Patch(':id/priority')
+  updatePriority(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupportPriorityDto,
+  ) {
+    return this.support.updatePriority(id, dto.priority);
+  }
+
+  // ─── Agent / Admin — resolve ───
+  @RequirePermissions('support:resolve')
+  @Post(':id/resolve')
+  resolve(
+    @Param('id') id: string,
+    @Body() body: { resolutionNote?: string },
+  ) {
+    return this.support.resolve(id, body?.resolutionNote);
+  }
+
+  // ─── Agent / Admin — close ───
+  @RequirePermissions('support:resolve')
+  @Post(':id/close')
+  close(
+    @Param('id') id: string,
+    @Body() body: { resolutionNote?: string },
+  ) {
+    return this.support.close(id, body?.resolutionNote);
+  }
+
+  // ─── Agent / Admin — reopen ───
+  @RequirePermissions('support:resolve')
+  @Post(':id/reopen')
+  reopen(@Param('id') id: string) {
+    return this.support.reopen(id);
+  }
+
+  // ─── Messages — reply ───
+  @RequirePermissions('support:reply')
+  @Post(':id/replies')
+  addReply(
+    @Param('id') id: string,
+    @Body() dto: ReplySupportDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.support.addMessage(
+      id,
+      user.sub,
+      user.role,
+      dto.body,
+      dto.attachments ?? [],
+      dto.isInternal ?? false,
+    );
+  }
+
+  // ─── Messages — list ───
+  @RequirePermissions('support:read')
+  @Get(':id/messages')
+  listMessages(
+    @Param('id') id: string,
+    @Query() query: { page?: number; limit?: number },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.support.listMessages(id, user.sub, user.role, query);
   }
 }
