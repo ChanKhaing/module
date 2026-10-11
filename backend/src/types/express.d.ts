@@ -5,10 +5,16 @@ declare global {
     interface Request {
       requestId: string;
       user?: {
-        id: string;
+        // JwtPayload shape (used by @CurrentUser() in controllers)
+        sub: string;
         email: string;
-        roles: string[];
+        role: string;
         permissions: string[];
+        jti?: string;
+        type?: 'access' | 'refresh';
+        // Express-style (backward compat)
+        id: string;
+        roles: string[];
       };
     }
   }

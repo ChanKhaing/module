@@ -15,6 +15,11 @@ import {
   SupportPriority,
 } from './schemas/support-ticket.schema';
 import {
+  SupportMessage,
+  SupportMessageDocument,
+  SenderRole,
+} from './schemas/support-message.schema';
+import {
   Order,
   OrderDocument,
 } from '../orders/schemas/order.schema';
@@ -36,6 +41,8 @@ export class SupportService {
   constructor(
     @InjectModel(SupportTicket.name)
     private readonly ticketModel: Model<SupportTicketDocument>,
+    @InjectModel(SupportMessage.name)
+    private readonly messageModel: Model<SupportMessageDocument>,
     @InjectModel(Order.name)
     private readonly orderModel: Model<OrderDocument>,
     @InjectModel(PurchasedTicket.name)
@@ -445,6 +452,152 @@ export class SupportService {
     );
 
     return ticket.toObject();
+  }
+
+
+  // ─────────────────────────────────────────
+  // REPLY (customer or agent/admin)
+  // ─────────────────────────────────────────
+  async addMessage(
+    ticketId: string,
+    userId: string,
+    userRole: string,
+    body: string,
+    attachments: string[] = [],
+    isInternal = false,
+  ) {
+    if (!Types.ObjectId.isValid(ticketId)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(ticketId).exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    // Customer only on own ticket
+    const isStaff = userRole === 'admin' || userRole === 'agent';
+    if (!isStaff && ticket.customerId.toString() !== userId) {
+      throw new ForbiddenException({
+        code: 'TICKET_ACCESS_DENIED',
+        message: 'You do not have access to this ticket',
+      });
+    }
+
+    if (ticket.status === SupportStatus.CLOSED) {
+      throw new BadRequestException({
+        code: 'TICKET_CLOSED',
+        message: 'Cannot reply to a closed ticket',
+      });
+    }
+
+    // Internal notes only by staff
+    if (isInternal && !isStaff) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Internal notes are staff-only',
+      });
+    }
+
+    // Determine senderRole
+    let senderRole: SenderRole;
+    if (userRole === 'admin') senderRole = SenderRole.ADMIN;
+    else if (userRole === 'agent') senderRole = SenderRole.AGENT;
+    else senderRole = SenderRole.CUSTOMER;
+
+    const message = await this.messageModel.create({
+      supportTicketId: new Types.ObjectId(ticketId),
+      senderId: new Types.ObjectId(userId),
+      senderRole,
+      body,
+      attachments,
+      isInternal,
+    });
+
+    // Bump ticket counters
+    ticket.messageCount += 1;
+    ticket.lastMessageAt = new Date();
+    // Auto: OPEN → IN_PROGRESS when staff replies
+    if (isStaff && ticket.status === SupportStatus.OPEN) {
+      ticket.status = SupportStatus.IN_PROGRESS;
+    }
+    await ticket.save();
+
+    this.logger.log(
+      `Message on ${ticket.ticketCode} by ${senderRole}`,
+      SupportService.name,
+    );
+
+    return message.toObject();
+  }
+
+  // ─────────────────────────────────────────
+  // LIST MESSAGES (thread)
+  // ─────────────────────────────────────────
+  async listMessages(
+    ticketId: string,
+    userId: string,
+    userRole: string,
+    query: { page?: number; limit?: number },
+  ) {
+    if (!Types.ObjectId.isValid(ticketId)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(ticketId).lean().exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    const isStaff = userRole === 'admin' || userRole === 'agent';
+    if (!isStaff && ticket.customerId.toString() !== userId) {
+      throw new ForbiddenException({
+        code: 'TICKET_ACCESS_DENIED',
+        message: 'You do not have access to this ticket',
+      });
+    }
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 50));
+    const skip = (page - 1) * limit;
+
+    // Customers never see internal messages
+    const filter: Record<string, any> = {
+      supportTicketId: new Types.ObjectId(ticketId),
+    };
+    if (!isStaff) filter.isInternal = false;
+
+    const [data, total] = await Promise.all([
+      this.messageModel
+        .find(filter)
+        .populate('senderId', 'email fullName')
+        .sort({ createdAt: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      this.messageModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   private async generateTicketCode(): Promise<string> {

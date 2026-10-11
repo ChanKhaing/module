@@ -15,6 +15,7 @@ import {
   AssignAgentDto,
   UpdateSupportStatusDto,
   UpdateSupportPriorityDto,
+  ReplySupportDto,
 } from './dto';
 import {
   CurrentUser,
@@ -129,5 +130,34 @@ export class SupportController {
   @Post(':id/reopen')
   reopen(@Param('id') id: string) {
     return this.support.reopen(id);
+  }
+
+  // ─── Messages — reply ───
+  @RequirePermissions('support:reply')
+  @Post(':id/replies')
+  addReply(
+    @Param('id') id: string,
+    @Body() dto: ReplySupportDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.support.addMessage(
+      id,
+      user.sub,
+      user.role,
+      dto.body,
+      dto.attachments ?? [],
+      dto.isInternal ?? false,
+    );
+  }
+
+  // ─── Messages — list ───
+  @RequirePermissions('support:read')
+  @Get(':id/messages')
+  listMessages(
+    @Param('id') id: string,
+    @Query() query: { page?: number; limit?: number },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.support.listMessages(id, user.sub, user.role, query);
   }
 }
