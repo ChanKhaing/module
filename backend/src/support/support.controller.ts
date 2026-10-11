@@ -12,6 +12,9 @@ import { SupportService } from './support.service';
 import {
   CreateSupportTicketDto,
   QuerySupportDto,
+  AssignAgentDto,
+  UpdateSupportStatusDto,
+  UpdateSupportPriorityDto,
 } from './dto';
 import {
   CurrentUser,
@@ -69,5 +72,62 @@ export class SupportController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.support.update(id, user.sub, patch);
+  }
+
+  // ─── Agent / Admin — assign ───
+  @RequirePermissions('support:resolve')
+  @Patch(':id/assign')
+  assignAgent(
+    @Param('id') id: string,
+    @Body() dto: AssignAgentDto,
+  ) {
+    return this.support.assignAgent(id, dto.agentId);
+  }
+
+  // ─── Agent / Admin — status ───
+  @RequirePermissions('support:resolve')
+  @Patch(':id/status')
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupportStatusDto,
+  ) {
+    return this.support.updateStatus(id, dto.status, dto.resolutionNote);
+  }
+
+  // ─── Agent / Admin — priority ───
+  @RequirePermissions('support:resolve')
+  @Patch(':id/priority')
+  updatePriority(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupportPriorityDto,
+  ) {
+    return this.support.updatePriority(id, dto.priority);
+  }
+
+  // ─── Agent / Admin — resolve ───
+  @RequirePermissions('support:resolve')
+  @Post(':id/resolve')
+  resolve(
+    @Param('id') id: string,
+    @Body() body: { resolutionNote?: string },
+  ) {
+    return this.support.resolve(id, body?.resolutionNote);
+  }
+
+  // ─── Agent / Admin — close ───
+  @RequirePermissions('support:resolve')
+  @Post(':id/close')
+  close(
+    @Param('id') id: string,
+    @Body() body: { resolutionNote?: string },
+  ) {
+    return this.support.close(id, body?.resolutionNote);
+  }
+
+  // ─── Agent / Admin — reopen ───
+  @RequirePermissions('support:resolve')
+  @Post(':id/reopen')
+  reopen(@Param('id') id: string) {
+    return this.support.reopen(id);
   }
 }
