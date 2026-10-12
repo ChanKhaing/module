@@ -1,7 +1,10 @@
 import {
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
+  SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
@@ -11,6 +14,7 @@ import { Server, Socket } from 'socket.io';
 
 import { LoggerService } from '../common';
 import { RedisService, RedisTTL } from '../infra/redis';
+import { SupportService } from './support.service';
 
 interface SocketUser {
   id: string;
@@ -37,6 +41,7 @@ export class SupportGateway
     private readonly config: ConfigService,
     private readonly redis: RedisService,
     private readonly logger: LoggerService,
+    private readonly support: SupportService,
   ) {}
 
   afterInit() {
@@ -119,6 +124,87 @@ export class SupportGateway
       `WS disconnected: ${user.email} (socket=${client.id})`,
       SupportGateway.name,
     );
+  }
+
+
+  // ─────────────────────────────────────────
+  // ROOM: JOIN
+  // ─────────────────────────────────────────
+  @SubscribeMessage('support:join')
+  async handleJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { ticketId: string },
+  ): Promise<{ ok: boolean; error?: string }> {
+    const user = client.data.user as SocketUser | undefined;
+    if (!user) {
+      return { ok: false, error: 'Not authenticated' };
+    }
+
+    const ticketId = body?.ticketId;
+    if (!ticketId || typeof ticketId !== 'string') {
+      return { ok: false, error: 'ticketId is required' };
+    }
+
+    try {
+      // Verify access (reuse SupportService ownership)
+      const isStaff = user.role === 'admin' || user.role === 'agent';
+      await this.support.findById(ticketId, user.id, isStaff);
+
+      const room = `support:${ticketId}`;
+      await client.join(room);
+
+      const roomSize = this.server.sockets.adapter.rooms.get(room)?.size ?? 1;
+
+      client.emit('support:joined', { ticketId, room, roomSize });
+
+      this.logger.log(
+        `WS join: ${user.email} → ${room} (size=${roomSize})`,
+        SupportGateway.name,
+      );
+
+      return { ok: true };
+    } catch (err) {
+      const msg = (err as Error).message;
+      this.logger.warn(
+        `WS join denied: ${user.email} → ${ticketId}: ${msg}`,
+        SupportGateway.name,
+      );
+      client.emit('support:error', { action: 'join', message: msg });
+      return { ok: false, error: msg };
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // ROOM: LEAVE
+  // ─────────────────────────────────────────
+  @SubscribeMessage('support:leave')
+  async handleLeave(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { ticketId: string },
+  ): Promise<{ ok: boolean }> {
+    const user = client.data.user as SocketUser | undefined;
+    if (!user) {
+      return { ok: false };
+    }
+
+    const ticketId = body?.ticketId;
+    if (!ticketId || typeof ticketId !== 'string') {
+      return { ok: false };
+    }
+
+    const room = `support:${ticketId}`;
+    await client.leave(room);
+
+    const roomSize = this.server.sockets.adapter.rooms.get(room)?.size ?? 0;
+
+    client.emit('support:left', { ticketId, room, roomSize });
+
+    this.logger.log(
+      `WS leave: ${user.email} ← ${room} (size=${roomSize})`,
+      SupportGateway.name,
+    );
+
+    return { ok: true };
   }
 
   // ─────────────────────────────────────────

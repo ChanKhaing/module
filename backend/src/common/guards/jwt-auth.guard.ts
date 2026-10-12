@@ -20,6 +20,11 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // ⚠️ Skip WebSocket context — gateway handles its own JWT auth (handleConnection)
+    if (context.getType() === 'ws') {
+      return true;
+    }
+
     // 1. @Public() metadata စစ်
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
