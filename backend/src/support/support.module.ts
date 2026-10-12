@@ -19,6 +19,7 @@ import {
 } from '../purchased-tickets/schemas/purchased-ticket.schema';
 
 import { SupportController } from './support.controller';
+import { SupportGateway } from './support.gateway';
 import { SupportService } from './support.service';
 
 @Module({
@@ -31,7 +32,7 @@ import { SupportService } from './support.service';
     ]),
   ],
   controllers: [SupportController],
-  providers: [SupportService],
+  providers: [SupportService, SupportGateway],
   exports: [SupportService, MongooseModule],
 })
 export class SupportModule {}

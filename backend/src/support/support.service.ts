@@ -600,6 +600,49 @@ export class SupportService {
     };
   }
 
+  // ─────────────────────────────────────────
+  // MARK MESSAGES READ
+  // ─────────────────────────────────────────
+  async markMessagesRead(
+    ticketId: string,
+    userId: string,
+    userRole: string,
+  ): Promise<number> {
+    if (!Types.ObjectId.isValid(ticketId)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid ticket id',
+      });
+    }
+
+    const ticket = await this.ticketModel.findById(ticketId).lean().exec();
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'SUPPORT_TICKET_NOT_FOUND',
+        message: 'Support ticket not found',
+      });
+    }
+
+    const isStaff = userRole === 'admin' || userRole === 'agent';
+    if (!isStaff && ticket.customerId.toString() !== userId) {
+      throw new ForbiddenException({
+        code: 'TICKET_ACCESS_DENIED',
+        message: 'You do not have access to this ticket',
+      });
+    }
+
+    const res = await this.messageModel.updateMany(
+      {
+        supportTicketId: new Types.ObjectId(ticketId),
+        senderId: { $ne: new Types.ObjectId(userId) },
+        readAt: null,
+      },
+      { $set: { readAt: new Date() } },
+    );
+
+    return res.modifiedCount ?? 0;
+  }
+
   private async generateTicketCode(): Promise<string> {
     const d = new Date();
     const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;

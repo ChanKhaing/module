@@ -20,6 +20,11 @@ export class PermissionsGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    // ⚠️ Skip WebSocket context — no HTTP request available
+    if (context.getType() === 'ws') {
+      return true;
+    }
+
     // 1. @RequirePermissions() metadata ဖတ်
     const required = this.reflector.getAllAndOverride<string[]>(
       PERMISSIONS_KEY,
