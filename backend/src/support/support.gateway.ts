@@ -308,6 +308,111 @@ export class SupportGateway
     }
   }
 
+
+  // ─────────────────────────────────────────
+  // TYPING: START
+  // ─────────────────────────────────────────
+  @SubscribeMessage('typing:start')
+  async handleTypingStart(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { ticketId: string },
+  ): Promise<{ ok: boolean }> {
+    const user = client.data.user as SocketUser | undefined;
+    if (!user) return { ok: false };
+
+    const ticketId = body?.ticketId;
+    if (!ticketId || typeof ticketId !== 'string') return { ok: false };
+
+    const room = `support:${ticketId}`;
+    // Broadcast to everyone in room except sender
+    client.to(room).emit('typing', {
+      ticketId,
+      userId: user.id,
+      role: user.role,
+      isTyping: true,
+    });
+
+    return { ok: true };
+  }
+
+  // ─────────────────────────────────────────
+  // TYPING: STOP
+  // ─────────────────────────────────────────
+  @SubscribeMessage('typing:stop')
+  async handleTypingStop(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { ticketId: string },
+  ): Promise<{ ok: boolean }> {
+    const user = client.data.user as SocketUser | undefined;
+    if (!user) return { ok: false };
+
+    const ticketId = body?.ticketId;
+    if (!ticketId || typeof ticketId !== 'string') return { ok: false };
+
+    const room = `support:${ticketId}`;
+    client.to(room).emit('typing', {
+      ticketId,
+      userId: user.id,
+      role: user.role,
+      isTyping: false,
+    });
+
+    return { ok: true };
+  }
+
+  // ─────────────────────────────────────────
+  // MESSAGE: READ
+  // ─────────────────────────────────────────
+  @SubscribeMessage('message:read')
+  async handleMessageRead(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { ticketId: string },
+  ): Promise<{ ok: boolean; error?: string; updated?: number }> {
+    const user = client.data.user as SocketUser | undefined;
+    if (!user) return { ok: false, error: 'Not authenticated' };
+
+    const ticketId = body?.ticketId;
+    if (!ticketId || typeof ticketId !== 'string') {
+      return { ok: false, error: 'ticketId is required' };
+    }
+
+    try {
+      const updated = await this.support.markMessagesRead(
+        ticketId,
+        user.id,
+        user.role,
+      );
+
+      const room = `support:${ticketId}`;
+      this.server.to(room).emit('message:read', {
+        ticketId,
+        userId: user.id,
+        readAt: new Date().toISOString(),
+      });
+
+      return { ok: true, updated };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // PRESENCE: CHECK
+  // ─────────────────────────────────────────
+  @SubscribeMessage('presence:check')
+  async handlePresenceCheck(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { userIds: string[] },
+  ): Promise<{ ok: boolean; data?: Record<string, boolean> }> {
+    const ids = Array.isArray(body?.userIds) ? body.userIds : [];
+    const out: Record<string, boolean> = {};
+    for (const id of ids) {
+      const v = await this.redis.get(`presence:${id}`);
+      out[id] = !!v;
+    }
+    return { ok: true, data: out };
+  }
+
   // ─────────────────────────────────────────
   private extractToken(client: Socket): string | null {
     // 1. handshake.auth.token
