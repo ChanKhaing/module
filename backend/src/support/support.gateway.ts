@@ -207,6 +207,107 @@ export class SupportGateway
     return { ok: true };
   }
 
+
+  // ─────────────────────────────────────────
+  // MESSAGE: SEND
+  // ─────────────────────────────────────────
+  @SubscribeMessage('message:send')
+  async handleMessageSend(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    body: {
+      ticketId: string;
+      body: string;
+      attachments?: string[];
+      isInternal?: boolean;
+    },
+  ): Promise<{ ok: boolean; error?: string; messageId?: string }> {
+    const user = client.data.user as SocketUser | undefined;
+    if (!user) {
+      return { ok: false, error: 'Not authenticated' };
+    }
+
+    const { ticketId, body: text, attachments, isInternal } = body ?? {};
+
+    if (!ticketId || typeof ticketId !== 'string') {
+      return { ok: false, error: 'ticketId is required' };
+    }
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return { ok: false, error: 'body is required' };
+    }
+
+    try {
+      // Reuse PJ-09 addMessage (ownership + persistence)
+      const message = await this.support.addMessage(
+        ticketId,
+        user.id,
+        user.role,
+        text.trim(),
+        Array.isArray(attachments) ? attachments : [],
+        Boolean(isInternal),
+      );
+
+      const room = `support:${ticketId}`;
+
+      // Emit to everyone in room (including sender for confirmation)
+      this.server.to(room).emit('message:new', {
+        ticketId,
+        message,
+      });
+
+      this.logger.log(
+        `WS msg ${message._id} on ${ticketId} by ${user.email}`,
+        SupportGateway.name,
+      );
+
+      return { ok: true, messageId: String(message._id) };
+    } catch (err) {
+      const msg = (err as Error).message;
+      this.logger.warn(
+        `WS msg denied: ${user.email} → ${ticketId}: ${msg}`,
+        SupportGateway.name,
+      );
+      client.emit('message:error', { ticketId, message: msg });
+      return { ok: false, error: msg };
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // MESSAGE: HISTORY
+  // ─────────────────────────────────────────
+  @SubscribeMessage('message:history')
+  async handleMessageHistory(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { ticketId: string; page?: number; limit?: number },
+  ): Promise<{ ok: boolean; error?: string; data?: any }> {
+    const user = client.data.user as SocketUser | undefined;
+    if (!user) {
+      return { ok: false, error: 'Not authenticated' };
+    }
+
+    const { ticketId, page, limit } = body ?? {};
+    if (!ticketId || typeof ticketId !== 'string') {
+      return { ok: false, error: 'ticketId is required' };
+    }
+
+    try {
+      const result = await this.support.listMessages(
+        ticketId,
+        user.id,
+        user.role,
+        { page: page ?? 1, limit: limit ?? 50 },
+      );
+
+      client.emit('message:history', { ticketId, ...result });
+
+      return { ok: true, data: result };
+    } catch (err) {
+      const msg = (err as Error).message;
+      client.emit('message:error', { ticketId, message: msg });
+      return { ok: false, error: msg };
+    }
+  }
+
   // ─────────────────────────────────────────
   private extractToken(client: Socket): string | null {
     // 1. handshake.auth.token
