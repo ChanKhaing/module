@@ -13,6 +13,7 @@ import { PurchasedTicketsModule } from './purchased-tickets/purchased-tickets.mo
 import { SupportModule } from './support/support.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
 import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
 import { HealthModule } from './health/health.module';
 import {  RolesModule } from './roles/roles.module';
@@ -86,6 +87,7 @@ imports: [
     SupportModule,
     AttachmentsModule,
     NotificationsModule,
+    AdminModule,
     SeedModule,
   ],
   controllers: [AppController],
