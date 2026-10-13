@@ -18,6 +18,8 @@ import {
 } from '../support/schemas/support-ticket.schema';
 
 import { DashboardController } from './dashboard/dashboard.controller';
+import { AdminLogsController } from './logs/logs.controller';
+import { AdminLogsService } from './logs/logs.service';
 import { DashboardService } from './dashboard/dashboard.service';
 
 @Module({
@@ -31,8 +33,8 @@ import { DashboardService } from './dashboard/dashboard.service';
       { name: SupportTicket.name, schema: SupportTicketSchema },
     ]),
   ],
-  controllers: [DashboardController],
-  providers: [DashboardService],
+  controllers: [DashboardController, AdminLogsController],
+  providers: [DashboardService, AdminLogsService],
   exports: [DashboardService],
 })
 export class AdminModule {}
