@@ -46,6 +46,7 @@ export class TicketsService {
     });
 
     this.logger.log(`Ticket created: ${ticket.name}`, TicketsService.name);
+    await this.invalidateTicketCache(ticket._id.toString());
     return ticket.toObject();
   }
 
@@ -65,6 +66,16 @@ export class TicketsService {
     );
 
     return result;
+  }
+
+  // ─────────────────────────────────────────
+  // CACHE INVALIDATION (called after every write)
+  // ─────────────────────────────────────────
+  private async invalidateTicketCache(ticketId?: string): Promise<void> {
+    if (ticketId) {
+      await this.cache.invalidate(RedisKeys.cacheTicket(ticketId));
+    }
+    await this.cache.clearResource('tickets'); // cache:tickets:*
   }
 
   private async findAllUncached(query: QueryTicketDto) {
@@ -181,6 +192,7 @@ export class TicketsService {
     }
 
     this.logger.log(`Ticket updated: ${ticket.name}`, TicketsService.name);
+    await this.invalidateTicketCache(id);
     return ticket;
   }
 
@@ -227,6 +239,9 @@ export class TicketsService {
 
     await this.ticketModel.findByIdAndDelete(id).exec();
     this.logger.log(`Ticket deleted: ${ticket.name}`, TicketsService.name);
+
+    await this.invalidateTicketCache(id);
+
     return { message: 'Ticket deleted successfully' };
   }
 
@@ -260,6 +275,9 @@ export class TicketsService {
     }
 
     this.logger.log(`Ticket status → ${status}: ${ticket.name}`, TicketsService.name);
+
+    await this.invalidateTicketCache(id);
+
     return ticket;
   }
 
