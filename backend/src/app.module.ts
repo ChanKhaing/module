@@ -21,6 +21,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
 import { SecurityModule } from './common/security';
 import { RedisModule, CacheModule } from './infra/redis';
 import { StorageModule } from './infra/minio';
+import { ClickHouseModule } from './infra/clickhouse';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
@@ -65,6 +66,7 @@ imports: [
     RedisModule,
     CacheModule,
     StorageModule,
+    ClickHouseModule,
     SecurityModule,
     LoggerModule,
     SharedModule,
