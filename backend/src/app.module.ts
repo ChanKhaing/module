@@ -19,7 +19,7 @@ import {  RolesModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 import { SecurityModule } from './common/security';
-import { RedisModule } from './infra/redis';
+import { RedisModule, CacheModule } from './infra/redis';
 import { StorageModule } from './infra/minio';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -63,6 +63,7 @@ imports: [
     // Infrastructure & Common Modules
     MailModule,
     RedisModule,
+    CacheModule,
     StorageModule,
     SecurityModule,
     LoggerModule,

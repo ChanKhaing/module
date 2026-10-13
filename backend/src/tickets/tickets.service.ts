@@ -12,6 +12,8 @@ import {
   TicketStatus,
 } from './schemas/ticket-product.schema';
 import { LoggerService, PaginationService } from '../common';
+import { CacheService } from '../infra/redis';
+import { RedisKeys, RedisTTL } from '../infra/redis';
 import { CreateTicketDto, QueryTicketDto, UpdateTicketDto } from './dto';
 
 @Injectable()
@@ -21,6 +23,7 @@ export class TicketsService {
     private readonly ticketModel: Model<TicketProductDocument>,
     private readonly logger: LoggerService,
     private readonly pagination: PaginationService,
+    private readonly cache: CacheService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -43,6 +46,7 @@ export class TicketsService {
     });
 
     this.logger.log(`Ticket created: ${ticket.name}`, TicketsService.name);
+    await this.invalidateTicketCache(ticket._id.toString());
     return ticket.toObject();
   }
 
@@ -50,6 +54,31 @@ export class TicketsService {
   // 5.2 — LIST (public, only published by default)
   // ─────────────────────────────────────────
   async findAll(query: QueryTicketDto) {
+    // Cache key by query (hash)
+    const cacheKey = RedisKeys.cacheTicketsListByQuery(
+      JSON.stringify(query),
+    );
+
+    const { data: result } = await this.cache.wrap(
+      cacheKey,
+      RedisTTL.CACHE_TICKET_LIST ?? 30,
+      () => this.findAllUncached(query),
+    );
+
+    return result;
+  }
+
+  // ─────────────────────────────────────────
+  // CACHE INVALIDATION (called after every write)
+  // ─────────────────────────────────────────
+  private async invalidateTicketCache(ticketId?: string): Promise<void> {
+    if (ticketId) {
+      await this.cache.invalidate(RedisKeys.cacheTicket(ticketId));
+    }
+    await this.cache.clearResource('tickets'); // cache:tickets:*
+  }
+
+  private async findAllUncached(query: QueryTicketDto) {
     const { page, limit, skip, sort } = this.pagination.normalize(query);
 
     const filter: Record<string, any> = {
@@ -109,6 +138,17 @@ export class TicketsService {
       });
     }
 
+    const cacheKey = RedisKeys.cacheTicket(id);
+    const { data: ticket } = await this.cache.wrap(
+      cacheKey,
+      RedisTTL.CACHE_TICKET ?? 60,
+      () => this.findByIdUncached(id),
+    );
+
+    return ticket;
+  }
+
+  private async findByIdUncached(id: string) {
     const ticket = await this.ticketModel.findById(id).lean().exec();
 
     if (!ticket) {
@@ -118,7 +158,6 @@ export class TicketsService {
       });
     }
 
-    // Public: draft/cancelled မပြ
     if (
       ticket.status === TicketStatus.DRAFT ||
       ticket.status === TicketStatus.CANCELLED
@@ -153,6 +192,7 @@ export class TicketsService {
     }
 
     this.logger.log(`Ticket updated: ${ticket.name}`, TicketsService.name);
+    await this.invalidateTicketCache(id);
     return ticket;
   }
 
@@ -199,6 +239,9 @@ export class TicketsService {
 
     await this.ticketModel.findByIdAndDelete(id).exec();
     this.logger.log(`Ticket deleted: ${ticket.name}`, TicketsService.name);
+
+    await this.invalidateTicketCache(id);
+
     return { message: 'Ticket deleted successfully' };
   }
 
@@ -232,6 +275,9 @@ export class TicketsService {
     }
 
     this.logger.log(`Ticket status → ${status}: ${ticket.name}`, TicketsService.name);
+
+    await this.invalidateTicketCache(id);
+
     return ticket;
   }
 
