@@ -145,7 +145,7 @@ export class SupportController {
       user.sub,
       user.role,
       dto.body,
-      dto.attachments ?? [],
+      dto.attachmentIds ?? [],
       dto.isInternal ?? false,
     );
   }

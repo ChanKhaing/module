@@ -218,7 +218,7 @@ export class SupportGateway
     body: {
       ticketId: string;
       body: string;
-      attachments?: string[];
+      attachmentIds?: string[];
       isInternal?: boolean;
     },
   ): Promise<{ ok: boolean; error?: string; messageId?: string }> {
@@ -227,7 +227,7 @@ export class SupportGateway
       return { ok: false, error: 'Not authenticated' };
     }
 
-    const { ticketId, body: text, attachments, isInternal } = body ?? {};
+    const { ticketId, body: text, attachmentIds, isInternal } = body ?? {};
 
     if (!ticketId || typeof ticketId !== 'string') {
       return { ok: false, error: 'ticketId is required' };
@@ -243,7 +243,7 @@ export class SupportGateway
         user.id,
         user.role,
         text.trim(),
-        Array.isArray(attachments) ? attachments : [],
+        Array.isArray(attachmentIds) ? attachmentIds : [],
         Boolean(isInternal),
       );
 

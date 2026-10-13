@@ -30,7 +30,10 @@ export class SupportMessage {
   body!: string;
 
   @Prop({ type: [String], default: [] })
-  attachments!: string[];
+  attachments!: string[];                     // denormalized URLs (fast display)
+
+  @Prop({ type: [Types.ObjectId], ref: 'Attachment', default: [] })
+  attachmentIds!: Types.ObjectId[];           // linked Attachment docs
 
   @Prop({ default: false })
   isInternal!: boolean;

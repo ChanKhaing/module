@@ -1,5 +1,7 @@
 import {
+  ArrayMaxSize,
   IsArray,
+  IsMongoId,
   IsOptional,
   IsString,
   MaxLength,
@@ -14,11 +16,12 @@ export class ReplySupportDto {
   @MaxLength(5000)
   body!: string;
 
-  @ApiPropertyOptional({ type: [String] })
+  @ApiPropertyOptional({ type: [String], description: 'Attachment ObjectIds' })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  attachments?: string[];
+  @ArrayMaxSize(10)
+  @IsMongoId({ each: true })
+  attachmentIds?: string[];
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()
