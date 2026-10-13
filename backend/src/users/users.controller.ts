@@ -18,11 +18,10 @@ import {
   AssignRoleDto,
   ChangePasswordDto,
 } from './dto';
-import {
+import { 
   CurrentUser,
   PaginationQueryDto,
-  RequirePermissions,
-} from '../common';
+  RequirePermissions, Audit } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
 
 @ApiTags('users')
@@ -48,6 +47,8 @@ export class UsersController {
   }
 
   // ─── ADMIN ───
+  @Audit('user.create', 'user')
+
   @RequirePermissions('user:create')
   @Post()
   create(@Body() dto: CreateUserDto) {
@@ -66,17 +67,26 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
+  @Audit('user.update-status', 'user')
+
+
   @RequirePermissions('user:update')
   @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateUserStatusDto) {
     return this.usersService.updateStatus(id, dto.status);
   }
 
+  @Audit('user.assign-role', 'user')
+
+
   @RequirePermissions('user:manage-role')
   @Patch(':id/role')
   assignRole(@Param('id') id: string, @Body() dto: AssignRoleDto) {
     return this.usersService.assignRole(id, dto.roleId);
   }
+
+  @Audit('user.delete', 'user')
+
 
   @RequirePermissions('user:delete')
   @Delete(':id')

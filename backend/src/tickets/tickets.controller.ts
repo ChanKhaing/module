@@ -17,7 +17,7 @@ import {
   QueryTicketDto,
   UpdatePriceDto,
 } from './dto';
-import { CurrentUser, Public, RequirePermissions } from '../common';
+import {  CurrentUser, Public, RequirePermissions, Audit } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
 
 @ApiTags('tickets')
@@ -45,6 +45,8 @@ export class TicketsController {
   }
 
   // ─── 5.1 ADMIN — Create ───
+  @Audit('ticket.create', 'ticket')
+
   @RequirePermissions('ticket:create')
   @Post()
   create(@Body() dto: CreateTicketDto, @CurrentUser() user: JwtPayload) {
@@ -52,6 +54,8 @@ export class TicketsController {
   }
 
   // ─── 5.3 ADMIN — Update / Price / Delete / Publish ───
+  @Audit('ticket.update', 'ticket')
+
   @RequirePermissions('ticket:update')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateTicketDto) {
@@ -64,11 +68,17 @@ export class TicketsController {
     return this.tickets.updatePrice(id, dto.price);
   }
 
+  @Audit('ticket.publish', 'ticket')
+
+
   @RequirePermissions('ticket:update')
   @Patch(':id/publish')
   publish(@Param('id') id: string) {
     return this.tickets.publish(id);
   }
+
+  @Audit('ticket.unpublish', 'ticket')
+
 
   @RequirePermissions('ticket:update')
   @Patch(':id/unpublish')
@@ -81,6 +91,9 @@ export class TicketsController {
   cancel(@Param('id') id: string) {
     return this.tickets.cancel(id);
   }
+
+  @Audit('ticket.delete', 'ticket')
+
 
   @RequirePermissions('ticket:delete')
   @Delete(':id')
