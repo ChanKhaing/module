@@ -39,6 +39,8 @@ import {
   CreateSupportTicketDto,
   QuerySupportDto,
 } from './dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/schemas/notification.schema';
 
 @Injectable()
 export class SupportService {
@@ -55,6 +57,7 @@ export class SupportService {
     private readonly purchasedModel: Model<PurchasedTicketDocument>,
     private readonly logger: LoggerService,
     private readonly pagination: PaginationService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -314,6 +317,27 @@ export class SupportService {
       SupportService.name,
     );
 
+    // ─── Notify agent ───
+    if (agentId !== ticket.customerId.toString()) {
+      await this.notifications
+        .create({
+          userId: agentId,
+          type: NotificationType.SUPPORT_ASSIGNED,
+          title: 'New ticket assigned to you',
+          body: `${ticket.ticketCode}: ${ticket.subject}`,
+          payload: {
+            ticketId: ticket._id.toString(),
+            ticketCode: ticket.ticketCode,
+          },
+        })
+        .catch((err) => {
+          this.logger.warn(
+            `Notify assign failed: ${(err as Error).message}`,
+            SupportService.name,
+          );
+        });
+    }
+
     return ticket.toObject();
   }
 
@@ -364,6 +388,34 @@ export class SupportService {
       `Ticket status: ${ticket.ticketCode} → ${status}`,
       SupportService.name,
     );
+
+    // ─── Notify customer on resolve/close ───
+    if (
+      status === SupportStatus.RESOLVED ||
+      status === SupportStatus.CLOSED
+    ) {
+      await this.notifications
+        .create({
+          userId: ticket.customerId.toString(),
+          type: NotificationType.SUPPORT_RESOLVED,
+          title:
+            status === SupportStatus.RESOLVED
+              ? 'Your ticket has been resolved'
+              : 'Your ticket has been closed',
+          body: note ?? `Ticket ${ticket.ticketCode}`,
+          payload: {
+            ticketId: ticket._id.toString(),
+            ticketCode: ticket.ticketCode,
+            status,
+          },
+        })
+        .catch((err) => {
+          this.logger.warn(
+            `Notify resolved failed: ${(err as Error).message}`,
+            SupportService.name,
+          );
+        });
+    }
 
     return ticket.toObject();
   }
@@ -582,6 +634,32 @@ export class SupportService {
       `Message on ${ticket.ticketCode} by ${senderRole}`,
       SupportService.name,
     );
+
+    // ─── Notify customer when staff replies (non-internal) ───
+    if (
+      isStaff &&
+      !isInternal &&
+      ticket.customerId.toString() !== userId
+    ) {
+      await this.notifications
+        .create({
+          userId: ticket.customerId.toString(),
+          type: NotificationType.SUPPORT_REPLY,
+          title: 'Support agent replied',
+          body: `New reply on ticket ${ticket.ticketCode}`,
+          payload: {
+            ticketId: ticket._id.toString(),
+            ticketCode: ticket.ticketCode,
+            messageId: (message._id as any).toString(),
+          },
+        })
+        .catch((err) => {
+          this.logger.warn(
+            `Notify customer failed: ${(err as Error).message}`,
+            SupportService.name,
+          );
+        });
+    }
 
     return message.toObject();
   }
