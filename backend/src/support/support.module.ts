@@ -18,6 +18,7 @@ import {
   PurchasedTicketSchema,
 } from '../purchased-tickets/schemas/purchased-ticket.schema';
 
+import { NotificationsModule } from '../notifications/notifications.module';
 import { SupportController } from './support.controller';
 import { SupportGateway } from './support.gateway';
 import { SupportService } from './support.service';
@@ -25,6 +26,7 @@ import { Attachment, AttachmentSchema } from '../attachments/schemas/attachment.
 
 @Module({
   imports: [
+    NotificationsModule,
     MongooseModule.forFeature([
       { name: SupportTicket.name, schema: SupportTicketSchema },
       { name: SupportMessage.name, schema: SupportMessageSchema },
