@@ -12,13 +12,16 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 import { RolesService } from './roles.service';
 import { CreateRoleDto, UpdateRoleDto, AssignPermissionsDto } from './dto';
-import { PaginationQueryDto, RequirePermissions } from '../common';
+import {  PaginationQueryDto, RequirePermissions, Audit } from '../common';
 
 @ApiTags('roles')
 @ApiBearerAuth('access-token')
 @Controller('roles')
 export class RolesController {
   constructor(private readonly roles: RolesService) {}
+
+  @Audit('role.create', 'role')
+
 
   @RequirePermissions('role:create')
   @Post()
@@ -38,17 +41,26 @@ export class RolesController {
     return this.roles.findById(id);
   }
 
+  @Audit('role.update', 'role')
+
+
   @RequirePermissions('role:update')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateRoleDto) {
     return this.roles.update(id, dto);
   }
 
+  @Audit('role.delete', 'role')
+
+
   @RequirePermissions('role:delete')
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.roles.remove(id);
   }
+
+  @Audit('role.assign-permissions', 'role')
+
 
   @RequirePermissions('role:update')
   @Post(':id/permissions')

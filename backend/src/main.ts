@@ -6,7 +6,8 @@ import {
   AllExceptionsFilter,
   LoggerService,
   ResponseInterceptor,
-} from './common';
+ AuditInterceptor } from './common';
+import { ClickHouseService } from './infra/clickhouse';
 
 
 async function bootstrap() {
@@ -19,7 +20,10 @@ async function bootstrap() {
   const reflector = app.get(Reflector);
     // ⚠️ Order အရေးကြီး
   // ─── Interceptor (အရင်) ───
-  app.useGlobalInterceptors(new ResponseInterceptor(reflector));
+  app.useGlobalInterceptors(
+    new ResponseInterceptor(reflector),
+    new AuditInterceptor(reflector, app.get(ClickHouseService), app.get(LoggerService)),
+  );
 
     // ─── Global Exception Filter  ───
   app.useGlobalFilters(new AllExceptionsFilter());
