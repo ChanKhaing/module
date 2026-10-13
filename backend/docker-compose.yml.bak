@@ -1,0 +1,108 @@
+services:
+  # ═══════════════════════════════════════════════
+  # MongoDB — Primary database
+  # ═══════════════════════════════════════════════
+  mongodb:
+    image: mongo:7
+    container_name: ticket-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+    volumes:
+      - ~/Desktop/my_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "-u", "admin", "-p", "admin123",
+             "--authenticationDatabase", "admin",
+             "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ═══════════════════════════════════════════════
+  # Redis — Session / OTP / Presence
+  # ═══════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: ticket-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ~/Desktop/my_redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ═══════════════════════════════════════════════
+  # MailHog — Dev email (PJ-03)
+  # ═══════════════════════════════════════════════
+  mailhog:
+    image: mailhog/mailhog
+    container_name: ticket-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    volumes:
+      - ~/Desktop/my_mailhog_data:/data
+
+  # ═══════════════════════════════════════════════
+  # MinIO — File storage (PJ-11)
+  # Console: http://localhost:9001 (minioadmin/minioadmin)
+  # ═══════════════════════════════════════════════
+  minio:
+    image: minio/minio:latest
+    container_name: ticket-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - ~/Desktop/my_minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ═══════════════════════════════════════════════
+  # ClickHouse — Logs (PJ-14)
+  # HTTP: http://localhost:8123
+  # Native: host 9002 → container 9000 (avoid MinIO 9000)
+  # ═══════════════════════════════════════════════
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: ticket-clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "9002:9000"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - ~/Desktop/my_clickhouse_data:/var/lib/clickhouse
+      - ~/Desktop/my_clickhouse_logs:/var/log/clickhouse-server
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8123/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
