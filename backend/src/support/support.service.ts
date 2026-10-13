@@ -40,6 +40,7 @@ import {
   QuerySupportDto,
 } from './dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ClickHouseService } from '../infra/clickhouse';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 
 @Injectable()
@@ -58,6 +59,7 @@ export class SupportService {
     private readonly logger: LoggerService,
     private readonly pagination: PaginationService,
     private readonly notifications: NotificationsService,
+    private readonly clickhouse: ClickHouseService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -134,6 +136,20 @@ export class SupportService {
       `Support ticket created: ${ticketCode}`,
       SupportService.name,
     );
+
+    this.clickhouse
+      .insertActivityLog({
+        userId,
+        eventType: 'support.ticket_created',
+        entity: 'support_ticket',
+        entityId: ticket._id.toString(),
+        payload: {
+          ticketCode,
+          category: ticket.category,
+          priority: ticket.priority,
+        },
+      })
+      .catch(() => undefined);
 
     return ticket.toObject();
   }
@@ -317,6 +333,16 @@ export class SupportService {
       SupportService.name,
     );
 
+    this.clickhouse
+      .insertActivityLog({
+        userId: agentId,
+        eventType: 'support.assigned',
+        entity: 'support_ticket',
+        entityId: ticket._id.toString(),
+        payload: { ticketCode: ticket.ticketCode, agentId },
+      })
+      .catch(() => undefined);
+
     // ─── Notify agent ───
     if (agentId !== ticket.customerId.toString()) {
       await this.notifications
@@ -388,6 +414,21 @@ export class SupportService {
       `Ticket status: ${ticket.ticketCode} → ${status}`,
       SupportService.name,
     );
+
+    this.clickhouse
+      .insertActivityLog({
+        userId: ticket.agentId?.toString() ?? ticket.customerId.toString(),
+        eventType: 'support.status_changed',
+        entity: 'support_ticket',
+        entityId: ticket._id.toString(),
+        payload: {
+          ticketCode: ticket.ticketCode,
+          from: 'previous',
+          to: status,
+          note,
+        },
+      })
+      .catch(() => undefined);
 
     // ─── Notify customer on resolve/close ───
     if (
@@ -634,6 +675,22 @@ export class SupportService {
       `Message on ${ticket.ticketCode} by ${senderRole}`,
       SupportService.name,
     );
+
+    this.clickhouse
+      .insertActivityLog({
+        userId,
+        eventType: 'support.message_sent',
+        entity: 'support_message',
+        entityId: (message._id as any).toString(),
+        payload: {
+          ticketId,
+          ticketCode: ticket.ticketCode,
+          role: senderRole,
+          isInternal,
+          attachmentCount: attachmentIds.length,
+        },
+      })
+      .catch(() => undefined);
 
     // ─── Notify customer when staff replies (non-internal) ───
     if (
