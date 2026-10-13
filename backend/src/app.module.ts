@@ -12,6 +12,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { PurchasedTicketsModule } from './purchased-tickets/purchased-tickets.module';
 import { SupportModule } from './support/support.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
 import { HealthModule } from './health/health.module';
 import {  RolesModule } from './roles/roles.module';
@@ -81,6 +82,7 @@ imports: [
     PurchasedTicketsModule,
     SupportModule,
     AttachmentsModule,
+    NotificationsModule,
     SeedModule,
   ],
   controllers: [AppController],
