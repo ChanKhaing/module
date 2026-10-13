@@ -18,6 +18,7 @@ import { PermissionsModule } from './permissions/permissions.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 import { SecurityModule } from './common/security';
 import { RedisModule } from './infra/redis';
+import { StorageModule } from './infra/minio';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
@@ -60,6 +61,7 @@ imports: [
     // Infrastructure & Common Modules
     MailModule,
     RedisModule,
+    StorageModule,
     SecurityModule,
     LoggerModule,
     SharedModule,
