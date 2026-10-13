@@ -21,6 +21,7 @@ import {
 import { SupportController } from './support.controller';
 import { SupportGateway } from './support.gateway';
 import { SupportService } from './support.service';
+import { Attachment, AttachmentSchema } from '../attachments/schemas/attachment.schema';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { SupportService } from './support.service';
       { name: SupportMessage.name, schema: SupportMessageSchema },
       { name: Order.name, schema: OrderSchema },
       { name: PurchasedTicket.name, schema: PurchasedTicketSchema },
+      { name: Attachment.name, schema: AttachmentSchema },
     ]),
   ],
   controllers: [SupportController],

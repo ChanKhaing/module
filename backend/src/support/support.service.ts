@@ -20,6 +20,10 @@ import {
   SenderRole,
 } from './schemas/support-message.schema';
 import {
+  Attachment,
+  AttachmentDocument,
+} from '../attachments/schemas/attachment.schema';
+import {
   Order,
   OrderDocument,
 } from '../orders/schemas/order.schema';
@@ -43,6 +47,8 @@ export class SupportService {
     private readonly ticketModel: Model<SupportTicketDocument>,
     @InjectModel(SupportMessage.name)
     private readonly messageModel: Model<SupportMessageDocument>,
+    @InjectModel(Attachment.name)
+    private readonly attachmentModel: Model<AttachmentDocument>,
     @InjectModel(Order.name)
     private readonly orderModel: Model<OrderDocument>,
     @InjectModel(PurchasedTicket.name)
@@ -463,7 +469,7 @@ export class SupportService {
     userId: string,
     userRole: string,
     body: string,
-    attachments: string[] = [],
+    attachmentIds: string[] = [],
     isInternal = false,
   ) {
     if (!Types.ObjectId.isValid(ticketId)) {
@@ -511,14 +517,57 @@ export class SupportService {
     else if (userRole === 'agent') senderRole = SenderRole.AGENT;
     else senderRole = SenderRole.CUSTOMER;
 
+    // Verify + link attachments
+    const validAttachmentIds: Types.ObjectId[] = [];
+    const attachmentUrls: string[] = [];
+
+    if (attachmentIds.length > 0) {
+      const docs = await this.attachmentModel.find({
+        _id: { $in: attachmentIds.map((id) => new Types.ObjectId(id)) },
+        deleted: false,
+      }).exec();
+
+      if (docs.length !== attachmentIds.length) {
+        throw new BadRequestException({
+          code: 'ATTACHMENT_NOT_FOUND',
+          message: 'One or more attachments do not exist',
+        });
+      }
+
+      for (const a of docs) {
+        if (a.uploadedBy.toString() !== userId && !isStaff) {
+          throw new ForbiddenException({
+            code: 'ATTACHMENT_ACCESS_DENIED',
+            message: 'You do not own one of the attachments',
+          });
+        }
+        validAttachmentIds.push(a._id as Types.ObjectId);
+        attachmentUrls.push(a.url);
+      }
+    }
+
     const message = await this.messageModel.create({
       supportTicketId: new Types.ObjectId(ticketId),
       senderId: new Types.ObjectId(userId),
       senderRole,
       body,
-      attachments,
+      attachments: attachmentUrls,
+      attachmentIds: validAttachmentIds,
       isInternal,
     });
+
+    // Link attachments → this message
+    if (validAttachmentIds.length > 0) {
+      await this.attachmentModel.updateMany(
+        { _id: { $in: validAttachmentIds } },
+        {
+          $set: {
+            refType: 'support_message',
+            refId: message._id as Types.ObjectId,
+          },
+        },
+      );
+    }
 
     // Bump ticket counters
     ticket.messageCount += 1;
@@ -583,6 +632,7 @@ export class SupportService {
       this.messageModel
         .find(filter)
         .populate('senderId', 'email fullName')
+        .populate('attachmentIds', 'url mime size originalName key bucket')
         .sort({ createdAt: 1 })
         .skip(skip)
         .limit(limit)

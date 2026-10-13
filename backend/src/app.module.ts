@@ -11,6 +11,7 @@ import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PurchasedTicketsModule } from './purchased-tickets/purchased-tickets.module';
 import { SupportModule } from './support/support.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
 import { HealthModule } from './health/health.module';
 import {  RolesModule } from './roles/roles.module';
@@ -18,6 +19,7 @@ import { PermissionsModule } from './permissions/permissions.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 import { SecurityModule } from './common/security';
 import { RedisModule } from './infra/redis';
+import { StorageModule } from './infra/minio';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
@@ -60,6 +62,7 @@ imports: [
     // Infrastructure & Common Modules
     MailModule,
     RedisModule,
+    StorageModule,
     SecurityModule,
     LoggerModule,
     SharedModule,
@@ -77,6 +80,7 @@ imports: [
     PaymentsModule,
     PurchasedTicketsModule,
     SupportModule,
+    AttachmentsModule,
     SeedModule,
   ],
   controllers: [AppController],
