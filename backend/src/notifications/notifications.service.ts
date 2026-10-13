@@ -13,6 +13,7 @@ import {
   NotificationType,
 } from './schemas/notification.schema';
 import { LoggerService, PaginationService } from '../common';
+import { NotificationsGateway } from './notifications.gateway';
 import { QueryNotificationDto } from './dto';
 
 export interface CreateNotificationInput {
@@ -30,6 +31,7 @@ export class NotificationsService {
     private readonly model: Model<NotificationDocument>,
     private readonly logger: LoggerService,
     private readonly pagination: PaginationService,
+    private readonly gateway: NotificationsGateway,
   ) {}
 
   // ─── CREATE (called from other services) ───
@@ -47,6 +49,16 @@ export class NotificationsService {
       `Notification created: ${doc._id} (${input.type}) → user ${input.userId}`,
       NotificationsService.name,
     );
+
+    // ─── Real-time push ───
+    try {
+      this.gateway.emitToUser(input.userId, 'notification:new', doc.toObject());
+    } catch (err) {
+      this.logger.warn(
+        `Notification push failed: ${(err as Error).message}`,
+        NotificationsService.name,
+      );
+    }
 
     return doc.toObject();
   }
