@@ -13,11 +13,12 @@ import {
   AttachmentDocument,
   AttachmentRefType,
 } from './schemas/attachment.schema';
+import { QueryAttachmentDto } from './dto';
 import {
   STORAGE_SERVICE,
   type StorageService,
 } from '../infra/minio/storage.interface';
-import { LoggerService } from '../common';
+import { LoggerService, PaginationService } from '../common';
 import type { MulterFile } from './types';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -44,6 +45,7 @@ export class AttachmentsService {
     @Inject(STORAGE_SERVICE)
     private readonly storage: StorageService,
     private readonly logger: LoggerService,
+    private readonly pagination: PaginationService,
   ) {}
 
   async upload(
@@ -196,6 +198,53 @@ export class AttachmentsService {
     this.logger.log(`Attachment deleted: ${id}`, AttachmentsService.name);
 
     return { message: 'Attachment deleted successfully' };
+  }
+
+  async list(query: QueryAttachmentDto) {
+    const { page, limit, skip, sort } = this.pagination.normalize(query);
+
+    const filter: Record<string, any> = { deleted: false };
+    if (query.refType) filter.refType = query.refType;
+    if (query.refId && Types.ObjectId.isValid(query.refId)) {
+      filter.refId = new Types.ObjectId(query.refId);
+    }
+
+    const [data, total] = await Promise.all([
+      this.model.find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      this.model.countDocuments(filter).exec(),
+    ]);
+
+    return { data, ...this.pagination.buildMeta(page, limit, total) };
+  }
+
+  async streamDownload(id: string) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException({
+        code: 'INVALID_ID',
+        message: 'Invalid attachment id',
+      });
+    }
+
+    const att = await this.model.findById(id).lean().exec();
+    if (!att || att.deleted) {
+      throw new NotFoundException({
+        code: 'ATTACHMENT_NOT_FOUND',
+        message: 'Attachment not found',
+      });
+    }
+
+    const stream = await this.storage.getStream(att.bucket, att.key);
+    return {
+      stream,
+      mime: att.mime,
+      size: att.size,
+      originalName: att.originalName,
+    };
   }
 
   private pickBucket(refType: AttachmentRefType): string {

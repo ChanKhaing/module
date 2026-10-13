@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from 'minio';
+import type { Readable } from 'stream';
 
 import {
   PresignedUrlResult,
@@ -78,6 +79,10 @@ export class MinioService implements StorageService, OnModuleInit {
   ): Promise<PresignedUrlResult> {
     const url = await this.client.presignedGetObject(bucket, key, expiresIn);
     return { url, expiresIn };
+  }
+
+  async getStream(bucket: string, key: string): Promise<Readable> {
+    return this.client.getObject(bucket, key);
   }
 
   async remove(bucket: string, key: string): Promise<void> {

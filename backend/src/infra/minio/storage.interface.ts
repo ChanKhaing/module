@@ -11,6 +11,8 @@ export interface PresignedUrlResult {
   expiresIn: number;
 }
 
+import type { Readable } from 'stream';
+
 export interface StorageService {
   upload(
     bucket: string,
@@ -26,6 +28,8 @@ export interface StorageService {
   ): Promise<PresignedUrlResult>;
 
   remove(bucket: string, key: string): Promise<void>;
+
+  getStream(bucket: string, key: string): Promise<Readable>;
 
   ensureBucket(bucket: string): Promise<void>;
 }

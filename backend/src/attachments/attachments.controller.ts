@@ -6,14 +6,17 @@ import {
   Get,
   Param,
   Post,
+  Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 
 import { AttachmentsService } from './attachments.service';
-import { UploadAttachmentDto } from './dto';
+import { UploadAttachmentDto, QueryAttachmentDto } from './dto';
 import type { MulterFile } from './types';
 import { CurrentUser, RequirePermissions } from '../common';
 import type { JwtPayload } from '../auth/interfaces';
@@ -42,6 +45,12 @@ export class AttachmentsController {
   }
 
   @RequirePermissions('attachment:read')
+  @Get()
+  list(@Query() query: QueryAttachmentDto) {
+    return this.attachments.list(query);
+  }
+
+  @RequirePermissions('attachment:read')
   @Get(':id')
   findById(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const isStaff = user.role === 'admin' || user.role === 'agent';
@@ -52,6 +61,22 @@ export class AttachmentsController {
   @Get(':id/url')
   presigned(@Param('id') id: string) {
     return this.attachments.presignedUrl(id);
+  }
+
+  @RequirePermissions('attachment:read')
+  @Get(':id/download')
+  async download(@Param('id') id: string, @Res() res: Response) {
+    const { stream, mime, size, originalName } =
+      await this.attachments.streamDownload(id);
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(originalName)}"`,
+    );
+    res.setHeader('Content-Length', size);
+
+    stream.pipe(res);
   }
 
   @RequirePermissions('attachment:create')
