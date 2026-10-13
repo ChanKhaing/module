@@ -15,7 +15,9 @@ export const RedisKeys = {
 
   // ─── Cache ───
   cacheTicketsList: 'cache:tickets:list',
+  cacheTicketsListByQuery: (hash: string) => `cache:tickets:list:${hash}`,
   cacheTicket: (id: string) => `cache:ticket:${id}`,
+  cacheUser: (id: string) => `cache:user:${id}`,
 
   // ─── Rate limit ───
   ratelimitLogin: (ip: string) => `ratelimit:login:${ip}`,

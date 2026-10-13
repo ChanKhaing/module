@@ -12,6 +12,8 @@ import {
   TicketStatus,
 } from './schemas/ticket-product.schema';
 import { LoggerService, PaginationService } from '../common';
+import { CacheService } from '../infra/redis';
+import { RedisKeys, RedisTTL } from '../infra/redis';
 import { CreateTicketDto, QueryTicketDto, UpdateTicketDto } from './dto';
 
 @Injectable()
@@ -21,6 +23,7 @@ export class TicketsService {
     private readonly ticketModel: Model<TicketProductDocument>,
     private readonly logger: LoggerService,
     private readonly pagination: PaginationService,
+    private readonly cache: CacheService,
   ) {}
 
   // ─────────────────────────────────────────
@@ -50,6 +53,21 @@ export class TicketsService {
   // 5.2 — LIST (public, only published by default)
   // ─────────────────────────────────────────
   async findAll(query: QueryTicketDto) {
+    // Cache key by query (hash)
+    const cacheKey = RedisKeys.cacheTicketsListByQuery(
+      JSON.stringify(query),
+    );
+
+    const { data: result } = await this.cache.wrap(
+      cacheKey,
+      RedisTTL.CACHE_TICKET_LIST ?? 30,
+      () => this.findAllUncached(query),
+    );
+
+    return result;
+  }
+
+  private async findAllUncached(query: QueryTicketDto) {
     const { page, limit, skip, sort } = this.pagination.normalize(query);
 
     const filter: Record<string, any> = {
@@ -109,6 +127,17 @@ export class TicketsService {
       });
     }
 
+    const cacheKey = RedisKeys.cacheTicket(id);
+    const { data: ticket } = await this.cache.wrap(
+      cacheKey,
+      RedisTTL.CACHE_TICKET ?? 60,
+      () => this.findByIdUncached(id),
+    );
+
+    return ticket;
+  }
+
+  private async findByIdUncached(id: string) {
     const ticket = await this.ticketModel.findById(id).lean().exec();
 
     if (!ticket) {
@@ -118,7 +147,6 @@ export class TicketsService {
       });
     }
 
-    // Public: draft/cancelled မပြ
     if (
       ticket.status === TicketStatus.DRAFT ||
       ticket.status === TicketStatus.CANCELLED
