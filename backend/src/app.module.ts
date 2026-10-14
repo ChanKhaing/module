@@ -24,6 +24,7 @@ import { RedisModule, CacheModule } from './infra/redis';
 import { StorageModule } from './infra/minio';
 import { ClickHouseModule } from './infra/clickhouse';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
 import { JwtAuthGuard, PermissionsGuard } from './common';
@@ -35,6 +36,12 @@ import { SeedModule } from './seeds/seed.module';
 
 @Module({
 imports: [
+    // ─── Rate limiting ───
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 1000, limit: 10 },
+      { name: 'medium', ttl: 60000, limit: 100 },
+    ]),
+
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
@@ -93,6 +100,10 @@ imports: [
   controllers: [AppController],
  providers: [
   AppService,
+  {
+    provide: APP_GUARD,
+    useClass: ThrottlerGuard,
+  },
 
   // Order အရေးကြီး — JwtAuthGuard အရင်၊ PermissionsGuard နောက်
   {

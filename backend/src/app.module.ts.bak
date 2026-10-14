@@ -1,0 +1,113 @@
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
+import { createObserveModule } from '@nestjs/observe';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { OrdersModule } from './orders/orders.module';
+import { PaymentsModule } from './payments/payments.module';
+import { PurchasedTicketsModule } from './purchased-tickets/purchased-tickets.module';
+import { SupportModule } from './support/support.module';
+import { AttachmentsModule } from './attachments/attachments.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
+import { SharedModule, LoggerModule, RequestIdMiddleware } from './common';
+import { HealthModule } from './health/health.module';
+import {  RolesModule } from './roles/roles.module';
+import { PermissionsModule } from './permissions/permissions.module';
+export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { SecurityModule } from './common/security';
+import { RedisModule, CacheModule } from './infra/redis';
+import { StorageModule } from './infra/minio';
+import { ClickHouseModule } from './infra/clickhouse';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
+import { JwtModule, JwtModuleOptions, JwtService  } from '@nestjs/jwt';
+import { JwtAuthGuard, PermissionsGuard } from './common';
+import type { StringValue } from 'ms';
+import { PassportModule } from '@nestjs/passport';
+import { MailModule } from './infra/mail/mail.module';
+import { SeedModule } from './seeds/seed.module';
+
+
+@Module({
+imports: [
+    // Configuration
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+
+    // Database Connection
+    ScheduleModule.forRoot(),
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        uri: config.get<string>('MONGO_URI'),
+      }),
+    }),
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.registerAsync({
+      global: true,                    // ← global ဖြစ်စေ
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): JwtModuleOptions => ({
+        secret: config.get<string>('JWT_ACCESS_SECRET'),
+        signOptions: {
+          expiresIn: (config.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m') as StringValue,
+        },
+      }),
+    }),
+
+    // Infrastructure & Common Modules
+    MailModule,
+    RedisModule,
+    CacheModule,
+    StorageModule,
+    ClickHouseModule,
+    SecurityModule,
+    LoggerModule,
+    SharedModule,
+    HealthModule,
+
+    // Core RBAC Modules
+    PermissionsModule,
+    RolesModule,
+
+    // Feature Modules
+    UsersModule,
+    AuthModule,
+    TicketsModule,
+    OrdersModule,
+    PaymentsModule,
+    PurchasedTicketsModule,
+    SupportModule,
+    AttachmentsModule,
+    NotificationsModule,
+    AdminModule,
+    SeedModule,
+  ],
+  controllers: [AppController],
+ providers: [
+  AppService,
+
+  // Order အရေးကြီး — JwtAuthGuard အရင်၊ PermissionsGuard နောက်
+  {
+    provide: APP_GUARD,
+    useClass: JwtAuthGuard,
+  },
+  {
+    provide: APP_GUARD,
+    useClass: PermissionsGuard,       // ← ဒါ ထည့်
+  },
+],
+})
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}
