@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
-import { User, UserDocument } from '../../users/schemas/user.schema';
+import { User, UserDocument, UserStatus } from '../../users/schemas/user.schema';
 import {
   TicketProduct,
   TicketProductDocument,
   TicketStatus,
 } from '../../tickets/schemas/ticket-product.schema';
-import { Order, OrderDocument } from '../../orders/schemas/order.schema';
+import { Order, OrderDocument, OrderStatus } from '../../orders/schemas/order.schema';
 import {
   Payment,
   PaymentDocument,
@@ -17,6 +17,7 @@ import {
 import {
   PurchasedTicket,
   PurchasedTicketDocument,
+  PurchasedTicketStatus,
 } from '../../purchased-tickets/schemas/purchased-ticket.schema';
 import {
   SupportTicket,
@@ -60,16 +61,16 @@ export class DashboardService {
       openSupport,
     ] = await Promise.all([
       this.userModel.countDocuments({ deletedAt: null }),
-      this.userModel.countDocuments({ status: 'active', deletedAt: null }),
+      this.userModel.countDocuments({ status: UserStatus.ACTIVE, deletedAt: null }),
       this.ticketModel.countDocuments(),
       this.ticketModel.countDocuments({ status: TicketStatus.PUBLISHED }),
       this.orderModel.countDocuments(),
-      this.orderModel.countDocuments({ status: 'pending' }),
-      this.orderModel.countDocuments({ status: 'paid' }),
+      this.orderModel.countDocuments({ status: OrderStatus.PENDING }),
+      this.orderModel.countDocuments({ status: OrderStatus.PAID }),
       this.paymentModel.countDocuments(),
       this.paymentModel.countDocuments({ status: PaymentStatus.SUCCESS }),
       this.purchasedModel.countDocuments(),
-      this.purchasedModel.countDocuments({ status: 'used' }),
+      this.purchasedModel.countDocuments({ status: PurchasedTicketStatus.USED }),
       this.supportModel.countDocuments(),
       this.supportModel.countDocuments({ status: SupportStatus.OPEN }),
     ]);
