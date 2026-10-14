@@ -30,6 +30,7 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
       database: this.config.get<string>('CLICKHOUSE_DATABASE') ?? 'default',
       clickhouse_settings: {
         date_time_input_format: 'best_effort',
+        wait_for_async_insert: 1,       // ← Sync — insert ပြီးရင် query ရ
       },
     });
   }
