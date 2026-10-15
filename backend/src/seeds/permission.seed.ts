@@ -57,6 +57,7 @@ const PERMISSIONS: PermissionDef[] = [
   { resource: 'support', action: 'resolve', description: 'Resolve support' },
 
   // ─── Misc ───
+  { resource: 'admin', action: 'read', description: 'View admin dashboard' },
   { resource: 'notification', action: 'read', description: 'View notifications' },
   { resource: 'audit', action: 'read', description: 'View audit logs' },
 ];
