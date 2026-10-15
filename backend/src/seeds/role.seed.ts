@@ -18,10 +18,12 @@ const ROLES: RoleDef[] = [
     isSystem: true,
     permissionCodes: [
       'ticket:read',
+      'ticket:view-my',
       'order:read',
       'order:create',
       'order:cancel',
       'payment:read',
+      'payment:create',
       'support:read',
       'support:create',
       'support:reply',
@@ -34,6 +36,7 @@ const ROLES: RoleDef[] = [
     isSystem: true,
     permissionCodes: [
       'ticket:read',
+      'ticket:redeem',
       'order:read',
       'payment:read',
       'support:read',

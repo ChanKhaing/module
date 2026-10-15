@@ -1,15 +1,17 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 
-import { User, UserDocument } from '../../users/schemas/user.schema';
+import { User, UserDocument, UserStatus } from '../../users/schemas/user.schema';
 import { RedisService, RedisKeys, RedisTTL } from '../../infra/redis';
 import { MailService } from '../../infra/mail/mail.service';
-import { resetPasswordTemplate } from '../../infra/mail/templates/reset-password.template';
+import { otpTemplate } from '../../infra/mail/templates/otp.template';
 import { PasswordService } from '../../common/security';
 import { LoggerService } from '../../common';
 
@@ -24,66 +26,127 @@ export class PasswordResetService {
   ) {}
 
   // ─────────────────────────────────────────
-  // REQUEST — send reset link
+  // REQUEST — check user, verify emailVerified, send OTP
   // ─────────────────────────────────────────
   async requestReset(email: string): Promise<{
     message: string;
+    email: string;
     expiresIn: number;
   }> {
     const user = await this.userModel.findOne({ email }).exec();
 
-    // ⚠️ Email enumeration block
+    // 1. Check if user exists in DB
     if (!user) {
       this.logger.warn(
         `Reset requested for unknown email: ${email}`,
         PasswordResetService.name,
       );
-
-      return {
-        message: 'If the email exists, a reset link has been sent.',
-        expiresIn: RedisTTL.RESET_TOKEN,
-      };
+      throw new NotFoundException({
+        code: 'EMAIL_NOT_FOUND',
+        message: 'No account registered with this email address.',
+      });
     }
 
-    if (user.status !== 'active') {
+    // 2. Check if user status is active
+    if (user.status === UserStatus.BANNED) {
+      throw new ForbiddenException({
+        code: 'ACCOUNT_BANNED',
+        message: 'This account has been banned.',
+      });
+    }
+
+    if (user.status === UserStatus.INACTIVE) {
+      throw new ForbiddenException({
+        code: 'ACCOUNT_INACTIVE',
+        message: 'This account is currently inactive.',
+      });
+    }
+
+    // 3. Verify that user's email is already verified
+    if (!user.emailVerified) {
       this.logger.warn(
-        `Reset requested for inactive user: ${email}`,
+        `Reset requested for unverified email: ${email}`,
         PasswordResetService.name,
       );
-
-      return {
-        message: 'If the email exists, a reset link has been sent.',
-        expiresIn: RedisTTL.RESET_TOKEN,
-      };
+      throw new BadRequestException({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Email is not verified yet. Please verify your email before requesting a password reset.',
+      });
     }
 
-    // Token: 32 bytes → 64 hex chars
-    const token = randomBytes(32).toString('hex');
-    const key = RedisKeys.resetToken(token);
+    // 4. Generate 6-digit OTP code & store in Redis
+    const code = randomInt(0, 10 ** 6).toString().padStart(6, '0');
+    const otpKey = RedisKeys.otp(email);
+    await this.redis.set(otpKey, code, RedisTTL.OTP);
 
-    await this.redis.set(key, user._id.toString(), RedisTTL.RESET_TOKEN);
-
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
-
-    const tpl = resetPasswordTemplate({
+    // 5. Send OTP via Email
+    const tpl = otpTemplate({
       fullName: user.fullName,
-      resetLink,
-      ttlMinutes: RedisTTL.RESET_TOKEN / 60,
+      otp: code,
+      ttlMinutes: RedisTTL.OTP / 60,
     });
 
     await this.mail.send({
       to: email,
-      subject: tpl.subject,
+      subject: `Password Reset Code: ${code}`,
       html: tpl.html,
       text: tpl.text,
     });
 
-    this.logger.log(`Password reset link sent: ${email}`, PasswordResetService.name);
+    this.logger.log(`Password reset OTP sent: ${email}`, PasswordResetService.name);
 
     return {
-      message: 'If the email exists, a reset link has been sent.',
-      expiresIn: RedisTTL.RESET_TOKEN,
+      message: 'Verification code sent to your verified email.',
+      email,
+      expiresIn: RedisTTL.OTP,
+    };
+  }
+
+  // ─────────────────────────────────────────
+  // VERIFY OTP — validate code & issue reset token
+  // ─────────────────────────────────────────
+  async verifyResetOtp(
+    email: string,
+    code: string,
+  ): Promise<{ message: string; resetToken: string }> {
+    const user = await this.userModel.findOne({ email }).exec();
+    if (!user) {
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found.',
+      });
+    }
+
+    const otpKey = RedisKeys.otp(email);
+    const stored = await this.redis.get(otpKey);
+
+    if (!stored) {
+      throw new BadRequestException({
+        code: 'OTP_EXPIRED',
+        message: 'Verification code has expired or was never requested. Please request a new code.',
+      });
+    }
+
+    if (stored !== code) {
+      throw new BadRequestException({
+        code: 'OTP_INVALID',
+        message: 'Verification code is incorrect.',
+      });
+    }
+
+    // OTP is valid -> delete OTP key
+    await this.redis.del(otpKey);
+
+    // Generate secure resetToken (valid for 15 minutes)
+    const resetToken = randomBytes(32).toString('hex');
+    const tokenKey = RedisKeys.resetToken(resetToken);
+    await this.redis.set(tokenKey, user._id.toString(), RedisTTL.RESET_TOKEN);
+
+    this.logger.log(`Password reset OTP verified: ${email}`, PasswordResetService.name);
+
+    return {
+      message: 'Code verified successfully. You may now reset your password.',
+      resetToken,
     };
   }
 
