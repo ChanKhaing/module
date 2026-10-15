@@ -22,6 +22,7 @@ const ROLES: RoleDef[] = [
       'order:create',
       'order:cancel',
       'payment:read',
+      'payment:create',
       'support:read',
       'support:create',
       'support:reply',
