@@ -35,6 +35,9 @@ const PERMISSIONS: PermissionDef[] = [
   { resource: 'ticket', action: 'create', description: 'Create ticket' },
   { resource: 'ticket', action: 'update', description: 'Update ticket' },
   { resource: 'ticket', action: 'delete', description: 'Delete ticket' },
+  { resource: 'ticket', action: 'view-my', description: 'View purchased tickets' },
+  { resource: 'ticket', action: 'redeem', description: 'Validate and redeem tickets' },
+  { resource: 'ticket', action: 'manage', description: 'Manage tickets and allocations' },
 
   // ─── Order ───
   { resource: 'order', action: 'read', description: 'View orders' },
@@ -43,6 +46,8 @@ const PERMISSIONS: PermissionDef[] = [
 
   // ─── Payment ───
   { resource: 'payment', action: 'read', description: 'View payments' },
+  { resource: 'payment', action: 'create', description: 'Initiate and confirm payments' },
+  { resource: 'payment', action: 'manage', description: 'Manage platform payments' },
   { resource: 'payment', action: 'refund', description: 'Refund payment' },
 
   // ─── Support ───
